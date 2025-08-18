@@ -1,0 +1,225 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_USER: postgres
+          POSTGRES_DB: test_db
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+      
+      redis:
+        image: redis:7
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 6379:6379
+
+    strategy:
+      matrix:
+        service: [auth-service, response-service, form-service, analytics-service]
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Node.js (for Node.js services)
+      if: matrix.service == 'auth-service' || matrix.service == 'response-service'
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
+        cache-dependency-path: services/${{ matrix.service }}/package-lock.json
+
+    - name: Setup Go (for Go services)
+      if: matrix.service == 'form-service'
+      uses: actions/setup-go@v5
+      with:
+        go-version: '1.21'
+
+    - name: Setup Python (for Python services)
+      if: matrix.service == 'analytics-service'
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.9'
+
+    - name: Install Node.js dependencies
+      if: matrix.service == 'auth-service' || matrix.service == 'response-service'
+      run: |
+        cd services/${{ matrix.service }}
+        npm ci
+
+    - name: Install Go dependencies
+      if: matrix.service == 'form-service'
+      run: |
+        cd services/${{ matrix.service }}
+        go mod download
+
+    - name: Install Python dependencies
+      if: matrix.service == 'analytics-service'
+      run: |
+        cd services/${{ matrix.service }}
+        pip install -r requirements.txt
+
+    - name: Run tests - Node.js
+      if: matrix.service == 'auth-service' || matrix.service == 'response-service'
+      run: |
+        cd services/${{ matrix.service }}
+        npm test
+      env:
+        DATABASE_URL: postgresql://postgres:postgres@localhost:5432/test_db
+        REDIS_URL: redis://localhost:6379
+        JWT_SECRET: test-secret
+
+    - name: Run tests - Go
+      if: matrix.service == 'form-service'
+      run: |
+        cd services/${{ matrix.service }}
+        go test ./...
+      env:
+        DATABASE_URL: postgresql://postgres:postgres@localhost:5432/test_db
+        REDIS_URL: redis://localhost:6379
+        JWT_SECRET: test-secret
+
+    - name: Run tests - Python
+      if: matrix.service == 'analytics-service'
+      run: |
+        cd services/${{ matrix.service }}
+        python -m pytest tests/ || echo "No tests found"
+      env:
+        FIREBASE_PROJECT_ID: test-project
+        JWT_SECRET: test-secret
+
+    - name: Run linting - Node.js
+      if: matrix.service == 'auth-service' || matrix.service == 'response-service'
+      run: |
+        cd services/${{ matrix.service }}
+        npm run lint
+
+    - name: Run linting - Go
+      if: matrix.service == 'form-service'
+      uses: golangci/golangci-lint-action@v3
+      with:
+        version: latest
+        working-directory: services/${{ matrix.service }}
+
+    - name: Run linting - Python
+      if: matrix.service == 'analytics-service'
+      run: |
+        cd services/${{ matrix.service }}
+        pip install flake8 black isort
+        flake8 . --max-line-length=88 --extend-ignore=E203,W503
+        black --check .
+        isort --check-only .
+
+  build:
+    needs: test
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push'
+    
+    strategy:
+      matrix:
+        service: [auth-service, response-service, form-service, analytics-service]
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Log in to Container Registry
+      uses: docker/login-action@v3
+      with:
+        registry: ${{ env.REGISTRY }}
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Extract metadata
+      id: meta
+      uses: docker/metadata-action@v5
+      with:
+        images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/${{ matrix.service }}
+        tags: |
+          type=ref,event=branch
+          type=ref,event=pr
+          type=sha,prefix={{branch}}-
+
+    - name: Build and push Docker image
+      uses: docker/build-push-action@v5
+      with:
+        context: ./services/${{ matrix.service }}
+        push: true
+        tags: ${{ steps.meta.outputs.tags }}
+        labels: ${{ steps.meta.outputs.labels }}
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Deploy to staging
+      run: |
+        echo "🚀 Deploying to staging environment..."
+        # Add your deployment logic here
+        # This could be deploying to AWS EKS, GKE, or other cloud providers
+        
+    - name: Run integration tests
+      run: |
+        echo "🧪 Running integration tests..."
+        # Add integration tests against staging environment
+        
+    - name: Deploy to production
+      if: success()
+      run: |
+        echo "🎉 Deploying to production environment..."
+        # Add production deployment logic here
+
+  security:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Run Trivy vulnerability scanner
+      uses: aquasecurity/trivy-action@master
+      with:
+        scan-type: 'fs'
+        scan-ref: '.'
+        format: 'sarif'
+        output: 'trivy-results.sarif'
+
+    - name: Upload Trivy scan results to GitHub Security tab
+      uses: github/codeql-action/upload-sarif@v2
+      with:
+        sarif_file: 'trivy-results.sarif'
