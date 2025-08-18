@@ -1,0 +1,294 @@
+# Kong API Management Configuration
+# This configuration sets up Kong as the API Management layer
+
+version: "3.1"
+
+services:
+  # API Gateway Service
+  - name: api-gateway
+    url: http://api-gateway:8080
+    protocol: http
+    host: api-gateway
+    port: 8080
+    path: /
+    retries: 3
+    connect_timeout: 10000
+    write_timeout: 10000
+    read_timeout: 10000
+    tags:
+      - gateway
+      - core
+
+  # Auth Service
+  - name: auth-service
+    url: http://auth-service:3001
+    protocol: http
+    host: auth-service
+    port: 3001
+    path: /
+    retries: 3
+    connect_timeout: 5000
+    write_timeout: 5000
+    read_timeout: 5000
+    tags:
+      - auth
+      - microservice
+
+  # Form Service
+  - name: form-service
+    url: http://form-service:8001
+    protocol: http
+    host: form-service
+    port: 8001
+    path: /
+    retries: 3
+    connect_timeout: 5000
+    write_timeout: 5000
+    read_timeout: 5000
+    tags:
+      - forms
+      - microservice
+
+  # Response Service
+  - name: response-service
+    url: http://response-service:3002
+    protocol: http
+    host: response-service
+    port: 3002
+    path: /
+    retries: 3
+    connect_timeout: 5000
+    write_timeout: 5000
+    read_timeout: 5000
+    tags:
+      - responses
+      - microservice
+
+  # Analytics Service
+  - name: analytics-service
+    url: http://analytics-service:5001
+    protocol: http
+    host: analytics-service
+    port: 5001
+    path: /
+    retries: 3
+    connect_timeout: 10000
+    write_timeout: 10000
+    read_timeout: 10000
+    tags:
+      - analytics
+      - microservice
+
+routes:
+  # Main API Gateway Route
+  - name: api-gateway-route
+    service: api-gateway
+    protocols:
+      - http
+      - https
+    hosts:
+      - api.xform.dev
+    paths:
+      - /
+    strip_path: false
+    preserve_host: true
+    tags:
+      - gateway
+
+plugins:
+  # Rate limiting on API Gateway
+  - name: rate-limiting
+    service: api-gateway
+    config:
+      minute: 1000
+      hour: 10000
+      day: 100000
+      policy: redis
+      redis_host: redis
+      redis_port: 6379
+      redis_timeout: 2000
+      fault_tolerant: true
+      hide_client_headers: false
+
+  # Global CORS
+  - name: cors
+    config:
+      origins:
+        - "https://app.xform.dev"
+        - "https://www.xform.dev"
+        - "http://localhost:3000"
+      methods:
+        - GET
+        - POST
+        - PUT
+        - DELETE
+        - OPTIONS
+        - PATCH
+      headers:
+        - Accept
+        - Accept-Version
+        - Content-Length
+        - Content-MD5
+        - Content-Type
+        - Date
+        - Authorization
+        - X-Auth-Token
+        - X-Requested-With
+      exposed_headers:
+        - X-Total-Count
+        - X-RateLimit-Remaining
+        - X-RateLimit-Limit
+      credentials: true
+      max_age: 86400
+
+  # Request/Response logging
+  - name: http-log
+    service: api-gateway
+    config:
+      http_endpoint: http://log-collector:8080/kong-logs
+      method: POST
+      timeout: 1000
+      keepalive: 1000
+      content_type: application/json
+
+  # Prometheus metrics
+  - name: prometheus
+    config:
+      per_consumer: true
+      status_code_metrics: true
+      latency_metrics: true
+      bandwidth_metrics: true
+
+  # Response caching for analytics
+  - name: proxy-cache
+    service: analytics-service
+    config:
+      cache_ttl: 300
+      content_type:
+        - application/json
+      request_method:
+        - GET
+      response_code:
+        - 200
+      cache_control: true
+      storage_ttl: 3600
+
+consumers:
+  # Frontend Application
+  - username: frontend-app
+    custom_id: frontend-app-001
+    tags:
+      - frontend
+      - application
+
+  # Mobile Application
+  - username: mobile-app
+    custom_id: mobile-app-001
+    tags:
+      - mobile
+      - application
+
+  # Admin Dashboard
+  - username: admin-dashboard
+    custom_id: admin-dashboard-001
+    tags:
+      - admin
+      - dashboard
+
+# Consumer-specific rate limiting
+consumer_plugins:
+  # Frontend app rate limits
+  - name: rate-limiting
+    consumer: frontend-app
+    config:
+      minute: 500
+      hour: 5000
+      day: 50000
+      policy: redis
+      redis_host: redis
+      redis_port: 6379
+
+  # Mobile app rate limits (lower)
+  - name: rate-limiting
+    consumer: mobile-app
+    config:
+      minute: 200
+      hour: 2000
+      day: 20000
+      policy: redis
+      redis_host: redis
+      redis_port: 6379
+
+  # Admin dashboard (higher limits)
+  - name: rate-limiting
+    consumer: admin-dashboard
+    config:
+      minute: 1000
+      hour: 10000
+      day: 100000
+      policy: redis
+      redis_host: redis
+      redis_port: 6379
+
+# Global plugins for all services
+global_plugins:
+  # Request ID for tracing
+  - name: correlation-id
+    config:
+      header_name: X-Request-ID
+      generator: uuid
+      echo_downstream: true
+
+  # Request size limiting
+  - name: request-size-limiting
+    config:
+      allowed_payload_size: 10
+
+  # Response rate limiting
+  - name: response-ratelimiting
+    config:
+      limits:
+        video: 
+          minute: 10
+        image:
+          minute: 100
+
+# Upstreams for load balancing
+upstreams:
+  - name: api-gateway-upstream
+    algorithm: round-robin
+    healthchecks:
+      active:
+        type: http
+        http_path: /health
+        timeout: 1
+        concurrency: 10
+        healthy:
+          interval: 5
+          successes: 3
+        unhealthy:
+          interval: 5
+          tcp_failures: 3
+          http_failures: 3
+    targets:
+      - target: api-gateway:8080
+        weight: 100
+
+  - name: auth-service-upstream
+    algorithm: least-connections
+    healthchecks:
+      active:
+        type: http
+        http_path: /health
+        timeout: 1
+        concurrency: 5
+        healthy:
+          interval: 10
+          successes: 2
+        unhealthy:
+          interval: 10
+          tcp_failures: 2
+          http_failures: 2
+    targets:
+      - target: auth-service:3001
+        weight: 100

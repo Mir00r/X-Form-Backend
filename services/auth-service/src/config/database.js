@@ -6,7 +6,7 @@ const connectDB = async () => {
   try {
     pool = new Pool({
       connectionString: process.env.DATABASE_URL || process.env.POSTGRES_URL,
-      ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
+      ssl: false, // Disable SSL for local development
       max: 20,
       idleTimeoutMillis: 30000,
       connectionTimeoutMillis: 2000,

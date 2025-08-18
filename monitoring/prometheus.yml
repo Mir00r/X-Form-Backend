@@ -1,0 +1,128 @@
+# Prometheus configuration for X-Form Backend monitoring
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+rule_files:
+  - "rules/*.yml"
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+          - alertmanager:9093
+
+scrape_configs:
+  # Prometheus itself
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+
+  # Traefik metrics
+  - job_name: 'traefik'
+    static_configs:
+      - targets: ['traefik:8080']
+    metrics_path: /metrics
+
+  # Kong metrics
+  - job_name: 'kong'
+    static_configs:
+      - targets: ['kong:8001']
+    metrics_path: /metrics
+
+  # API Gateway metrics
+  - job_name: 'api-gateway'
+    static_configs:
+      - targets: ['api-gateway:9090']
+    metrics_path: /metrics
+
+  # Auth Service metrics
+  - job_name: 'auth-service'
+    static_configs:
+      - targets: ['auth-service:3001']
+    metrics_path: /metrics
+
+  # Form Service metrics
+  - job_name: 'form-service'
+    static_configs:
+      - targets: ['form-service:8001']
+    metrics_path: /metrics
+
+  # Response Service metrics
+  - job_name: 'response-service'
+    static_configs:
+      - targets: ['response-service:3002']
+    metrics_path: /metrics
+
+  # Real-time Service metrics
+  - job_name: 'realtime-service'
+    static_configs:
+      - targets: ['realtime-service:8002']
+    metrics_path: /metrics
+
+  # Analytics Service metrics
+  - job_name: 'analytics-service'
+    static_configs:
+      - targets: ['analytics-service:5001']
+    metrics_path: /metrics
+
+  # PostgreSQL metrics
+  - job_name: 'postgres'
+    static_configs:
+      - targets: ['postgres-exporter:9187']
+
+  # Redis metrics
+  - job_name: 'redis'
+    static_configs:
+      - targets: ['redis-exporter:9121']
+
+  # Node.js applications (if using prom-client)
+  - job_name: 'node-services'
+    static_configs:
+      - targets: 
+        - 'auth-service:3001'
+        - 'response-service:3002'
+    metrics_path: /api/metrics
+
+  # Docker metrics
+  - job_name: 'docker'
+    static_configs:
+      - targets: ['cadvisor:8080']
+
+recording_rules:
+  # API Gateway performance rules
+  - name: api_gateway_performance
+    rules:
+      - record: api_gateway:request_rate_5m
+        expr: rate(http_requests_total[5m])
+      
+      - record: api_gateway:error_rate_5m
+        expr: rate(http_requests_total{status=~"5.."}[5m]) / rate(http_requests_total[5m])
+      
+      - record: api_gateway:latency_p95_5m
+        expr: histogram_quantile(0.95, rate(http_request_duration_seconds_bucket[5m]))
+
+  # Service health rules
+  - name: service_health
+    rules:
+      - record: service:up
+        expr: up{job=~".*-service"}
+      
+      - record: service:cpu_usage
+        expr: rate(container_cpu_usage_seconds_total[5m])
+      
+      - record: service:memory_usage
+        expr: container_memory_usage_bytes / container_spec_memory_limit_bytes
+
+  # Business metrics
+  - name: business_metrics
+    rules:
+      - record: forms:created_rate_1h
+        expr: increase(forms_created_total[1h])
+      
+      - record: responses:submitted_rate_1h
+        expr: increase(responses_submitted_total[1h])
+      
+      - record: users:active_5m
+        expr: count(increase(user_requests_total[5m]) > 0)

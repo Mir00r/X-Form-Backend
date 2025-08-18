@@ -1,0 +1,110 @@
+# Traefik All-in-One Configuration
+# Handles: Ingress Controller + API Gateway + API Management
+
+# Global Configuration
+global:
+  checkNewVersion: false
+  sendAnonymousUsage: false
+
+# API and Dashboard
+api:
+  dashboard: true
+  debug: false
+  insecure: true
+
+# Entry Points (Ingress Layer)
+entryPoints:
+  web:
+    address: ":80"
+    http:
+      redirections:
+        entryPoint:
+          to: websecure
+          scheme: https
+          permanent: true
+  
+  websecure:
+    address: ":443"
+    http:
+      tls:
+        certResolver: letsencrypt
+        options: default
+  
+  traefik:
+    address: ":8080"
+  
+  # WebSocket entry point
+  websocket:
+    address: ":8002"
+
+# Certificate Resolvers (TLS Management)
+certificatesResolvers:
+  letsencrypt:
+    acme:
+      email: admin@xform.dev
+      storage: /data/acme.json
+      httpChallenge:
+        entryPoint: web
+
+# Providers (Service Discovery)
+providers:
+  docker:
+    endpoint: "unix:///var/run/docker.sock"
+    exposedByDefault: false
+    network: xform-network
+    watch: true
+    
+  file:
+    directory: /etc/traefik/dynamic
+    watch: true
+
+# Logging (API Management - Observability)
+log:
+  level: INFO
+  filePath: "/var/log/traefik/traefik.log"
+  format: json
+
+accessLog:
+  filePath: "/var/log/traefik/access.log"
+  format: json
+  bufferingSize: 100
+  fields:
+    defaultMode: keep
+    headers:
+      defaultMode: keep
+      names:
+        User-Agent: keep
+        Authorization: drop
+        Content-Type: keep
+        
+# Metrics (API Management - Analytics)
+metrics:
+  prometheus:
+    addEntryPointsLabels: true
+    addServicesLabels: true
+    addRoutersLabels: true
+    entryPoint: traefik
+    manualRouting: true
+
+# Tracing (API Management - Observability) - Disabled for now
+# tracing:
+#   jaeger:
+#     samplingServerURL: "http://jaeger:14268/api/sampling"
+#     localAgentHostPort: "jaeger:6831"
+
+# Plugin Configuration (API Management Extensions)
+experimental:
+  plugins:
+    # JWT Authentication Plugin
+    jwt-auth:
+      moduleName: "github.com/traefik/plugin-jwt"
+      version: "v0.3.1"
+    
+    # Advanced Rate Limiting Plugin  
+    rate-limit-advanced:
+      moduleName: "github.com/traefik/plugin-ratelimit"
+      version: "v0.4.1"
+
+# Health Check
+ping:
+  entryPoint: traefik
