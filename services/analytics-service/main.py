@@ -1,33 +1,105 @@
 """
-Analytics Service for X-Form Backend
+Analytics Service for X-Form Backend - Basic Version
 Handles response analytics, reporting, and data export functionality
 """
 
-from fastapi import FastAPI, HTTPException, Depends, status
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel
 from typing import Optional, List, Dict, Any
 import os
-import json
-import pandas as pd
-from datetime import datetime, timedelta
-import firebase_admin
-from firebase_admin import credentials, firestore
-from google.cloud import bigquery
 import uvicorn
+from datetime import datetime
 
-# Initialize Firebase Admin
-if not firebase_admin._apps:
-    # For local development, use service account key
-    if os.path.exists('firebase-key.json'):
-        cred = credentials.Certificate('firebase-key.json')
-    else:
-        # For production, use environment variables
-        cred = credentials.Certificate({
-            "type": "service_account",
-            "project_id": os.getenv('FIREBASE_PROJECT_ID'),
-            "private_key": os.getenv('FIREBASE_PRIVATE_KEY', '').replace('\\n', '\n'),
+# Initialize FastAPI app
+app = FastAPI(
+    title="X-Form Analytics Service",
+    description="Analytics and reporting service for X-Form Backend",
+    version="1.0.0"
+)
+
+# Add CORS middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Pydantic models
+class AnalyticsRequest(BaseModel):
+    form_id: str
+    start_date: Optional[str] = None
+    end_date: Optional[str] = None
+
+class AnalyticsResponse(BaseModel):
+    form_id: str
+    total_responses: int
+    analytics_data: Dict[str, Any]
+
+# Health check endpoint
+@app.get("/health")
+async def health_check():
+    return {
+        "status": "healthy",
+        "service": "analytics-service",
+        "timestamp": datetime.utcnow().isoformat(),
+        "version": "1.0.0"
+    }
+
+# Basic analytics endpoints
+@app.get("/api/analytics")
+async def get_analytics():
+    return {
+        "message": "Analytics service is running",
+        "available_endpoints": [
+            "/health",
+            "/api/analytics",
+            "/api/analytics/{form_id}",
+            "/api/reports/{form_id}"
+        ]
+    }
+
+@app.get("/api/analytics/{form_id}")
+async def get_form_analytics(form_id: str):
+    return AnalyticsResponse(
+        form_id=form_id,
+        total_responses=0,
+        analytics_data={
+            "status": "placeholder",
+            "message": f"Analytics for form {form_id}",
+            "last_updated": datetime.utcnow().isoformat()
+        }
+    )
+
+@app.get("/api/reports/{form_id}")
+async def get_form_report(form_id: str, format: str = "json"):
+    return {
+        "form_id": form_id,
+        "report_format": format,
+        "message": f"Report for form {form_id} in {format} format",
+        "status": "placeholder",
+        "timestamp": datetime.utcnow().isoformat()
+    }
+
+@app.post("/api/analytics")
+async def create_analytics_record(request: AnalyticsRequest):
+    return {
+        "message": "Analytics record created",
+        "form_id": request.form_id,
+        "status": "success",
+        "timestamp": datetime.utcnow().isoformat()
+    }
+
+if __name__ == "__main__":
+    port = int(os.getenv("PORT", 5001))
+    uvicorn.run(
+        "main:app",
+        host="0.0.0.0",
+        port=port,
+        reload=False
+    )
             "client_email": os.getenv('FIREBASE_CLIENT_EMAIL'),
         })
     firebase_admin.initialize_app(cred)
