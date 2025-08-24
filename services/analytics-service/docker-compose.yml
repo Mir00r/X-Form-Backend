@@ -1,0 +1,103 @@
+# Docker Compose for Analytics Service Development
+version: '3.8'
+
+services:
+  analytics-service:
+    build: .
+    container_name: x-form-analytics-service
+    ports:
+      - "8080:8080"
+    environment:
+      - ENVIRONMENT=development
+      - HOST=0.0.0.0
+      - PORT=8080
+      - LOG_LEVEL=DEBUG
+      
+      # BigQuery Configuration
+      - BIGQUERY_PROJECT_ID=${BIGQUERY_PROJECT_ID}
+      - BIGQUERY_DATASET_ID=${BIGQUERY_DATASET_ID:-x_form_analytics}
+      - BIGQUERY_LOCATION=${BIGQUERY_LOCATION:-US}
+      - GOOGLE_APPLICATION_CREDENTIALS=/app/credentials/gcp-key.json
+      
+      # Redis Configuration
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_PASSWORD=${REDIS_PASSWORD:-}
+      - REDIS_DB=0
+      
+      # Cache Configuration
+      - CACHE_TTL=3600
+      - CACHE_PREFIX=analytics
+      - ENABLE_CACHE=true
+      
+      # Rate Limiting
+      - ENABLE_RATE_LIMITING=true
+      
+      # JWT Configuration
+      - JWT_SECRET=${JWT_SECRET:-your-super-secret-jwt-key}
+      - JWT_ALGORITHM=HS256
+      - JWT_EXPIRATION_HOURS=24
+      
+      # CORS Configuration
+      - CORS_ORIGINS=["http://localhost:3000", "http://localhost:8000"]
+      - CORS_METHODS=["GET", "POST", "PUT", "DELETE", "OPTIONS"]
+      - CORS_HEADERS=["*"]
+    
+    volumes:
+      - ./credentials:/app/credentials:ro
+      - ./app:/app/app:ro
+    
+    depends_on:
+      - redis
+    
+    networks:
+      - analytics-network
+    
+    restart: unless-stopped
+    
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  redis:
+    image: redis:7-alpine
+    container_name: x-form-analytics-redis
+    ports:
+      - "6379:6379"
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:-}
+    volumes:
+      - redis_data:/data
+    networks:
+      - analytics-network
+    restart: unless-stopped
+    
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+
+  # Development BigQuery Emulator (optional)
+  bigquery-emulator:
+    image: ghcr.io/goccy/bigquery-emulator:latest
+    container_name: x-form-bigquery-emulator
+    ports:
+      - "9050:9050"
+    environment:
+      - PROJECT=test-project
+      - DATASET=test_dataset
+    networks:
+      - analytics-network
+    profiles:
+      - emulator
+
+volumes:
+  redis_data:
+    driver: local
+
+networks:
+  analytics-network:
+    driver: bridge
