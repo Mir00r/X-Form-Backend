@@ -49,17 +49,33 @@ services:
       dockerfile: Dockerfile
     environment:
       - NODE_ENV=development
-      - PORT=3001
-      - JWT_SECRET=your-jwt-secret-key
-      - POSTGRES_URL=postgresql://xform_user:xform_password@postgres:5432/xform_db
+      - AUTH_SERVICE_PORT=3001
+      - HOST=0.0.0.0
+      - DATABASE_URL=postgresql://xform_user:xform_password@postgres:5432/xform_db
+      - JWT_SECRET=your-super-secret-jwt-key-should-be-at-least-32-characters-long
+      - JWT_REFRESH_SECRET=your-super-secret-refresh-token-key-should-be-different-from-jwt-secret
+      - JWT_EXPIRES_IN=15m
+      - JWT_REFRESH_EXPIRES_IN=7d
       - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
       - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
+      - FRONTEND_URL=http://localhost:3000
+      - REDIS_URL=redis://redis:6379
+      - ACCOUNT_LOCKOUT_ATTEMPTS=5
+      - ACCOUNT_LOCKOUT_DURATION=3600000
+      - ENABLE_AUDIT_LOGGING=true
+      - LOG_LEVEL=info
     ports:
       - "3001:3001"
     depends_on:
       - postgres
-    volumes:
-      - ./services/auth-service:/app
+      - redis
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    restart: unless-stopped
     networks:
       - xform-network
 
