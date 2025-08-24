@@ -58,3 +58,89 @@ config-prod.yaml
 # Air (Go live reload)
 .air.toml
 tmp/
+
+# Node.js
+node_modules/
+dist/
+build/
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+
+# Environment variables
+.env
+.env.local
+.env.development
+.env.test
+.env.production
+
+# Optional npm cache directory
+.npm/
+
+# Optional eslint cache
+.eslintcache
+
+# Optional REPL history
+.node_repl_history
+
+# IDE and OS specific files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Binaries for programs
+*.exe
+*.bin
+
+# Go module cache
+vendor/
+
+# Test caches
+*.test
+
+# Operating System and Editor Specific Files
+.DS_Store
+.idea/
+.vscode/
+
+# Log files
+*.log
+
+# Temporary files
+*~
+*.tmp
+
+# Byte-compiled / optimized / compiled files
+__pycache__/
+*.pyc
+*.pyd
+*.pyo
+
+# Virtual environment
+venv/
+env/
+.venv/
+
+# IDE/Editor specific files
+.idea/
+.vscode/
+*.sublime-project
+*.sublime-workspace
+.spyderproject
+.spyproject
+
+# Log files
+*.log
+
+# Temporary files and directories
+tmp/
+*.tmp
+
+# Database files
+*.sqlite3
+
+# User-specific local settings
+local_settings.py
