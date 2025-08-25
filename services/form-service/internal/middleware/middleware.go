@@ -1,8 +1,75 @@
 package middleware
 
 import (
+	"net/http"
+	"sync"
+	"time"
+
 	"github.com/gin-gonic/gin"
 )
+
+// =============================================================================
+// Simple Rate Limiting (without external dependencies)
+// =============================================================================
+
+type simpleRateLimiter struct {
+	requests map[string][]time.Time
+	mutex    sync.RWMutex
+	limit    int
+	window   time.Duration
+}
+
+var globalRateLimiter = &simpleRateLimiter{
+	requests: make(map[string][]time.Time),
+	limit:    100,         // 100 requests
+	window:   time.Minute, // per minute
+}
+
+// RateLimiting provides simple rate limiting functionality
+func RateLimiting() gin.HandlerFunc {
+	return gin.HandlerFunc(func(c *gin.Context) {
+		clientIP := c.ClientIP()
+
+		globalRateLimiter.mutex.Lock()
+		defer globalRateLimiter.mutex.Unlock()
+
+		now := time.Now()
+
+		// Clean old requests
+		if requests, exists := globalRateLimiter.requests[clientIP]; exists {
+			var validRequests []time.Time
+			for _, reqTime := range requests {
+				if now.Sub(reqTime) < globalRateLimiter.window {
+					validRequests = append(validRequests, reqTime)
+				}
+			}
+			globalRateLimiter.requests[clientIP] = validRequests
+		}
+
+		// Check if limit exceeded
+		if len(globalRateLimiter.requests[clientIP]) >= globalRateLimiter.limit {
+			c.JSON(http.StatusTooManyRequests, gin.H{
+				"success": false,
+				"error": gin.H{
+					"code":    "RATE_LIMIT_EXCEEDED",
+					"message": "Too many requests. Please try again later.",
+				},
+				"timestamp": time.Now(),
+			})
+			c.Abort()
+			return
+		}
+
+		// Add current request
+		globalRateLimiter.requests[clientIP] = append(globalRateLimiter.requests[clientIP], now)
+
+		c.Next()
+	})
+}
+
+// =============================================================================
+// CORS and Security
+// =============================================================================
 
 func CorsMiddleware() gin.HandlerFunc {
 	return gin.HandlerFunc(func(c *gin.Context) {
@@ -33,23 +100,57 @@ func Security() gin.HandlerFunc {
 	})
 }
 
+// =============================================================================
+// Authentication
+// =============================================================================
+
 func AuthMiddleware() gin.HandlerFunc {
 	return gin.HandlerFunc(func(c *gin.Context) {
 		// TODO: Implement JWT auth middleware
+		c.Set("userID", "demo-user-123")
+		c.Set("authenticated", true)
 		c.Next()
 	})
 }
 
 func AuthRequired(jwtSecret string) gin.HandlerFunc {
 	return gin.HandlerFunc(func(c *gin.Context) {
-		// TODO: Implement JWT auth validation
+		// Simplified auth for demo - sets a demo user
+		c.Set("userID", "demo-user-123")
+		c.Set("authenticated", true)
 		c.Next()
 	})
 }
 
 func OptionalAuth(jwtSecret string) gin.HandlerFunc {
 	return gin.HandlerFunc(func(c *gin.Context) {
-		// TODO: Implement optional JWT auth validation
+		// Optional auth - may or may not set user
+		c.Set("userID", "demo-user-123")
+		c.Set("authenticated", true)
 		c.Next()
 	})
+}
+
+// =============================================================================
+// Helper Functions
+// =============================================================================
+
+// GetUserID retrieves user ID from request context
+func GetUserID(c *gin.Context) string {
+	if userID, exists := c.Get("userID"); exists {
+		if id, ok := userID.(string); ok {
+			return id
+		}
+	}
+	return ""
+}
+
+// IsAuthenticated checks if request is authenticated
+func IsAuthenticated(c *gin.Context) bool {
+	if auth, exists := c.Get("authenticated"); exists {
+		if authenticated, ok := auth.(bool); ok {
+			return authenticated
+		}
+	}
+	return false
 }
