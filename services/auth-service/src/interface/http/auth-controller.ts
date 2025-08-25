@@ -234,6 +234,69 @@ export class AuthController {
     }
   };
 
+  // POST /auth/profile
+  updateProfile = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const userId = (req as any).user?.userId;
+      
+      if (!userId) {
+        res.status(401).json(this.createErrorResponse('UNAUTHORIZED', 'User not authenticated'));
+        return;
+      }
+
+      const updateData = {
+        firstName: req.body.firstName,
+        lastName: req.body.lastName,
+        bio: req.body.bio,
+        avatar: req.body.avatar,
+      };
+
+      const updatedProfile = await this.authService.updateUserProfile(userId, updateData);
+
+      res.status(200).json(this.createSuccessResponse(updatedProfile, 'Profile updated successfully'));
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  // POST /auth/resend-verification
+  resendVerification = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const userId = (req as any).user?.userId;
+      
+      if (!userId) {
+        res.status(401).json(this.createErrorResponse('UNAUTHORIZED', 'User not authenticated'));
+        return;
+      }
+
+      await this.authService.resendVerificationEmail(userId);
+
+      res.status(200).json(this.createSuccessResponse(null, 'Verification email sent successfully'));
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  // POST /auth/change-password
+  changePassword = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const userId = (req as any).user?.userId;
+      
+      if (!userId) {
+        res.status(401).json(this.createErrorResponse('UNAUTHORIZED', 'User not authenticated'));
+        return;
+      }
+
+      const { currentPassword, newPassword } = req.body;
+
+      await this.authService.changePassword(userId, currentPassword, newPassword);
+
+      res.status(200).json(this.createSuccessResponse(null, 'Password changed successfully'));
+    } catch (error) {
+      next(error);
+    }
+  };
+
   // Private validation methods following Single Responsibility Principle
   private validateRegisterRequest(body: any): ValidationError[] {
     const errors: ValidationError[] = [];
