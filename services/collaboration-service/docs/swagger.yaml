@@ -1,0 +1,591 @@
+basePath: /
+definitions:
+  APIErrorResponse:
+    properties:
+      code:
+        example: 404
+        type: integer
+      error:
+        example: Resource not found
+        type: string
+      message:
+        example: The requested resource was not found
+        type: string
+      timestamp:
+        example: "2024-01-15T10:30:00Z"
+        type: string
+      trace_id:
+        example: abc123xyz
+        type: string
+    type: object
+  APIHealthResponse:
+    properties:
+      dependencies:
+        additionalProperties: true
+        type: object
+      environment:
+        example: development
+        type: string
+      service:
+        example: collaboration-service
+        type: string
+      status:
+        example: healthy
+        type: string
+      timestamp:
+        example: "2024-01-15T10:30:00Z"
+        type: string
+      uptime:
+        example: 1h30m45s
+        type: string
+      version:
+        example: 1.0.0
+        type: string
+    type: object
+  APIMetricsResponse:
+    properties:
+      activeConnections:
+        example: 25
+        type: integer
+      activeRooms:
+        example: 8
+        type: integer
+      errorsPerSecond:
+        example: 0
+        type: integer
+      messagesPerSecond:
+        example: 45
+        type: integer
+      systemUsage:
+        additionalProperties: true
+        type: object
+      totalConnections:
+        example: 150
+        type: integer
+      totalRooms:
+        example: 10
+        type: integer
+    type: object
+  WebSocketConnectionInfo:
+    properties:
+      auth_required:
+        example: true
+        type: boolean
+      auth_type:
+        example: Bearer JWT
+        type: string
+      description:
+        example: WebSocket endpoint for real-time collaboration
+        type: string
+      endpoint:
+        example: /api/v1/ws
+        type: string
+      events:
+        items:
+          type: string
+        type: array
+      protocol:
+        example: ws
+        type: string
+    type: object
+  main.CursorPosition:
+    properties:
+      questionId:
+        example: q1
+        type: string
+      section:
+        example: title
+        type: string
+      x:
+        example: 100
+        type: integer
+      "y":
+        example: 200
+        type: integer
+    type: object
+  main.ErrorResponse:
+    properties:
+      code:
+        example: NOT_FOUND
+        type: string
+      error:
+        example: Resource not found
+        type: string
+      message:
+        example: The requested resource was not found
+        type: string
+      path:
+        example: /api/v1/rooms/invalid-id
+        type: string
+      timestamp:
+        example: "2024-01-15T10:30:00Z"
+        type: string
+    type: object
+  main.HealthResponse:
+    properties:
+      dependencies:
+        additionalProperties: true
+        type: object
+      environment:
+        example: development
+        type: string
+      service:
+        example: collaboration-service
+        type: string
+      status:
+        example: healthy
+        type: string
+      timestamp:
+        example: "2024-01-15T10:30:00Z"
+        type: string
+      uptime:
+        example: 1h30m45s
+        type: string
+      version:
+        example: 1.0.0
+        type: string
+    type: object
+  main.MetricsResponse:
+    properties:
+      activeConnections:
+        example: 25
+        type: integer
+      activeRooms:
+        example: 8
+        type: integer
+      averageLatency:
+        example: 12.5
+        type: number
+      cpuUsage:
+        example: 15.2
+        type: number
+      errorsPerSecond:
+        example: 0
+        type: integer
+      memoryUsage:
+        example: 256MB
+        type: string
+      messagesPerSecond:
+        example: 45
+        type: integer
+      totalConnections:
+        example: 150
+        type: integer
+      totalRooms:
+        example: 10
+        type: integer
+    type: object
+  main.RoomDetailsResponse:
+    properties:
+      createdAt:
+        example: "2024-01-15T10:00:00Z"
+        type: string
+      formId:
+        example: 550e8400-e29b-41d4-a716-446655440000
+        type: string
+      isActive:
+        example: true
+        type: boolean
+      lastActivity:
+        example: "2024-01-15T10:29:45Z"
+        type: string
+      maxUsers:
+        example: 10
+        type: integer
+      metadata:
+        additionalProperties:
+          type: string
+        type: object
+      updatedAt:
+        example: "2024-01-15T10:30:00Z"
+        type: string
+      userCount:
+        example: 3
+        type: integer
+      users:
+        items:
+          $ref: '#/definitions/main.UserInfo'
+        type: array
+    type: object
+  main.RoomInfo:
+    properties:
+      createdAt:
+        example: "2024-01-15T10:00:00Z"
+        type: string
+      formId:
+        example: 550e8400-e29b-41d4-a716-446655440000
+        type: string
+      isActive:
+        example: true
+        type: boolean
+      lastActivity:
+        example: "2024-01-15T10:29:45Z"
+        type: string
+      maxUsers:
+        example: 10
+        type: integer
+      updatedAt:
+        example: "2024-01-15T10:30:00Z"
+        type: string
+      userCount:
+        example: 3
+        type: integer
+    type: object
+  main.RoomsResponse:
+    properties:
+      activeCount:
+        example: 8
+        type: integer
+      rooms:
+        items:
+          $ref: '#/definitions/main.RoomInfo'
+        type: array
+      timestamp:
+        example: "2024-01-15T10:30:00Z"
+        type: string
+      totalCount:
+        example: 10
+        type: integer
+    type: object
+  main.UserInfo:
+    properties:
+      avatar:
+        example: https://example.com/avatar.jpg
+        type: string
+      connectedAt:
+        example: "2024-01-15T10:15:00Z"
+        type: string
+      cursorPosition:
+        $ref: '#/definitions/main.CursorPosition'
+      email:
+        example: john.doe@example.com
+        type: string
+      id:
+        example: user123
+        type: string
+      isOnline:
+        example: true
+        type: boolean
+      lastSeen:
+        example: "2024-01-15T10:29:30Z"
+        type: string
+      name:
+        example: John Doe
+        type: string
+      role:
+        example: editor
+        type: string
+    type: object
+  main.UserSession:
+    properties:
+      connectedAt:
+        example: "2024-01-15T10:15:00Z"
+        type: string
+      connections:
+        items:
+          type: string
+        type: array
+      isActive:
+        example: true
+        type: boolean
+      lastActivity:
+        example: "2024-01-15T10:29:30Z"
+        type: string
+      rooms:
+        items:
+          type: string
+        type: array
+      userId:
+        example: user123
+        type: string
+    type: object
+  main.UserSessionsResponse:
+    properties:
+      activeCount:
+        example: 20
+        type: integer
+      sessions:
+        items:
+          $ref: '#/definitions/main.UserSession'
+        type: array
+      timestamp:
+        example: "2024-01-15T10:30:00Z"
+        type: string
+      totalCount:
+        example: 25
+        type: integer
+    type: object
+host: localhost:8080
+info:
+  contact:
+    email: dev@xform.com
+    name: X-Form Development Team
+    url: https://github.com/Mir00r/X-Form-Backend
+  description: "Real-time collaboration service for X-Form with WebSocket and HTTP
+    endpoints\n\n## \U0001F3D7️ Architecture Features\n- **Real-time WebSocket Communication**
+    for instant collaboration\n- **Form Session Management** with Redis persistence\n-
+    **Cursor Tracking** and live position sharing\n- **Question Management** with
+    real-time updates\n- **JWT Authentication** with service-to-service communication\n-
+    **Rate Limiting** and connection management\n\n## \U0001F510 Security Features\n-
+    **JWT Bearer Authentication** for WebSocket connections\n- **Rate limiting** per
+    user and connection\n- **CORS** configuration for cross-origin requests\n- **Connection
+    validation** and session management\n\n## \U0001F310 WebSocket Events\nThe service
+    primarily operates through WebSocket connections at `/api/v1/ws` endpoint.\nSee
+    the [WebSocket API documentation](/docs/websocket-api.md) for detailed event specifications.\n\n##
+    \U0001F680 Getting Started\n1. Use HTTP endpoints to monitor service health and
+    manage sessions\n2. Connect to WebSocket endpoint with JWT token for real-time
+    collaboration\n3. Send `join:form` event to join collaboration session\n4. Listen
+    for real-time events and send updates"
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+  termsOfService: https://xform.com/terms
+  title: X-Form Collaboration Service API
+  version: 1.0.0
+paths:
+  /api/v1/health:
+    get:
+      consumes:
+      - application/json
+      description: Returns the health status of the collaboration service and its
+        dependencies
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Service is healthy
+          schema:
+            $ref: '#/definitions/main.HealthResponse'
+        "503":
+          description: Service is unhealthy
+          schema:
+            $ref: '#/definitions/main.ErrorResponse'
+      summary: Get service health status
+      tags:
+      - Health & Monitoring
+  /api/v1/metrics:
+    get:
+      consumes:
+      - application/json
+      description: Returns real-time metrics and statistics for the collaboration
+        service
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Service metrics retrieved successfully
+          schema:
+            $ref: '#/definitions/main.MetricsResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/main.ErrorResponse'
+      summary: Get service metrics
+      tags:
+      - Health & Monitoring
+  /api/v1/rooms:
+    get:
+      consumes:
+      - application/json
+      description: Returns a list of all active collaboration rooms (forms) with basic
+        information
+      parameters:
+      - default: false
+        description: Filter by active rooms only
+        in: query
+        name: active
+        type: boolean
+      - default: 50
+        description: Maximum number of rooms to return
+        in: query
+        name: limit
+        type: integer
+      - default: 0
+        description: Number of rooms to skip
+        in: query
+        name: offset
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Rooms retrieved successfully
+          schema:
+            $ref: '#/definitions/main.RoomsResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/main.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get all collaboration rooms
+      tags:
+      - Room Management
+  /api/v1/rooms/{formId}:
+    get:
+      consumes:
+      - application/json
+      description: Returns detailed information about a specific collaboration room
+        including users and their cursor positions
+      parameters:
+      - description: Form ID
+        example: '"550e8400-e29b-41d4-a716-446655440000"'
+        in: path
+        name: formId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Room details retrieved successfully
+          schema:
+            $ref: '#/definitions/main.RoomDetailsResponse'
+        "404":
+          description: Room not found
+          schema:
+            $ref: '#/definitions/main.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/main.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get room details
+      tags:
+      - Room Management
+  /api/v1/rooms/{formId}/users:
+    get:
+      consumes:
+      - application/json
+      description: Returns a list of users currently in a specific collaboration room
+      parameters:
+      - description: Form ID
+        example: '"550e8400-e29b-41d4-a716-446655440000"'
+        in: path
+        name: formId
+        required: true
+        type: string
+      - default: false
+        description: Filter by online users only
+        in: query
+        name: online
+        type: boolean
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Room users retrieved successfully
+          schema:
+            items:
+              $ref: '#/definitions/main.UserInfo'
+            type: array
+        "404":
+          description: Room not found
+          schema:
+            $ref: '#/definitions/main.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/main.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get room users
+      tags:
+      - Room Management
+  /api/v1/sessions:
+    get:
+      consumes:
+      - application/json
+      description: Returns a list of all active user sessions across the service
+      parameters:
+      - default: false
+        description: Filter by active sessions only
+        in: query
+        name: active
+        type: boolean
+      - default: 50
+        description: Maximum number of sessions to return
+        in: query
+        name: limit
+        type: integer
+      - default: 0
+        description: Number of sessions to skip
+        in: query
+        name: offset
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: User sessions retrieved successfully
+          schema:
+            $ref: '#/definitions/main.UserSessionsResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/main.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get all user sessions
+      tags:
+      - Session Management
+  /api/v1/sessions/{userId}:
+    get:
+      consumes:
+      - application/json
+      description: Returns detailed information about a specific user's session including
+        connections and room participation
+      parameters:
+      - description: User ID
+        example: '"user123"'
+        in: path
+        name: userId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: User session details retrieved successfully
+          schema:
+            $ref: '#/definitions/main.UserSession'
+        "404":
+          description: User session not found
+          schema:
+            $ref: '#/definitions/main.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/main.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get user session details
+      tags:
+      - Session Management
+  /api/v1/ws/info:
+    get:
+      consumes:
+      - application/json
+      description: Returns information about the WebSocket endpoint, authentication
+        requirements, and supported events for real-time collaboration
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: WebSocket information retrieved successfully
+          schema:
+            $ref: '#/definitions/WebSocketConnectionInfo'
+      summary: Get WebSocket information
+      tags:
+      - WebSocket
+schemes:
+- http
+- https
+securityDefinitions:
+  BearerAuth:
+    description: Type "Bearer" followed by a space and JWT token
+    in: header
+    name: Authorization
+    type: apiKey
+swagger: "2.0"
