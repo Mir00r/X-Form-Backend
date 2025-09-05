@@ -155,9 +155,9 @@ type ConditionalLogicDTO struct {
 
 // ConditionDTO represents a single condition
 type ConditionDTO struct {
-	QuestionID string      `json:"questionId" validate:"required" example:"q1"`
-	Operator   string      `json:"operator" validate:"required,oneof=equals not_equals contains not_contains greater_than less_than" example:"equals"`
-	Value      interface{} `json:"value" example:"yes"`
+	QuestionID string `json:"questionId" validate:"required" example:"q1"`
+	Operator   string `json:"operator" validate:"required,oneof=equals not_equals contains not_contains greater_than less_than" example:"equals"`
+	Value      string `json:"value" example:"yes"`
 }
 
 // =============================================================================
@@ -281,10 +281,10 @@ type HealthDependenciesDTO struct {
 
 // DependencyStatusDTO represents the status of a single dependency
 type DependencyStatusDTO struct {
-	Status       string        `json:"status" example:"healthy"`
-	ResponseTime time.Duration `json:"responseTimeMs" example:"25"`
-	LastChecked  time.Time     `json:"lastChecked" example:"2024-01-01T12:00:00Z"`
-	Error        string        `json:"error,omitempty"`
+	Status       string    `json:"status" example:"healthy"`
+	ResponseTime int64     `json:"responseTimeMs" example:"25"`
+	LastChecked  time.Time `json:"lastChecked" example:"2024-01-01T12:00:00Z"`
+	Error        string    `json:"error,omitempty"`
 }
 
 // HealthMetricsDTO represents service metrics

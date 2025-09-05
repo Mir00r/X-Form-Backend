@@ -39,11 +39,8 @@ func Connect(databaseURL string) (*gorm.DB, error) {
 // Migrate runs database migrations
 func Migrate(db *gorm.DB) error {
 	return db.AutoMigrate(
-		&models.User{},
 		&models.Form{},
 		&models.Question{},
-		&models.FormCollaborator{},
-		&models.FileUpload{},
 	)
 }
 
