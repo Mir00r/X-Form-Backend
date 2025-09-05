@@ -25,7 +25,6 @@ const errorHandler = require('./middleware/errorHandler');
 
 // Import routes
 const v1Routes = require('./routes/v1');
-const healthRoutes = require('./routes/v1/health');
 
 // Import swagger configuration
 const { specs, swaggerUi, swaggerUiOptions } = require('./config/swagger');
@@ -101,7 +100,7 @@ class ResponseServiceApplication {
     this.app.use(limiter);
 
     // Custom security middleware
-    this.app.use(securityMiddleware);
+    securityMiddleware.applySecurity(this.app);
 
     // Request logging
     this.app.use((req, res, next) => {
@@ -123,9 +122,7 @@ class ResponseServiceApplication {
       next();
     });
 
-    // Health check endpoint (before authentication)
-    this.app.use('/health', healthRoutes);
-    this.app.use('/api/v1/health', healthRoutes);
+    // Health check endpoints are handled in the v1 routes
   }
 
   /**
@@ -183,8 +180,11 @@ class ResponseServiceApplication {
    * Setup error handling
    */
   setupErrorHandling() {
-    // Use custom error handler
-    this.app.use(errorHandler);
+    // 404 handler for undefined routes
+    this.app.use(errorHandler.notFoundHandler);
+    
+    // Global error handler
+    this.app.use(errorHandler.globalErrorHandler);
 
     // Graceful shutdown handler
     process.on('SIGTERM', () => this.shutdown('SIGTERM'));

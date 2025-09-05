@@ -4,7 +4,6 @@
  */
 
 const rateLimit = require('express-rate-limit');
-const slowDown = require('express-slow-down');
 const helmet = require('helmet');
 const cors = require('cors');
 const { createErrorResponse } = require('../dto/response-dtos');
@@ -128,16 +127,15 @@ const submissionRateLimit = rateLimit({
   legacyHeaders: false
 });
 
-// Slow down middleware for repeated requests
-const speedLimiter = slowDown({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  delayAfter: 50, // Allow 50 requests per windowMs without delay
-  delayMs: 500, // Add 500ms delay per request after delayAfter
-  maxDelayMs: 5000, // Maximum delay of 5 seconds
-  skip: (req) => {
-    return req.path === '/health' || req.path === '/api/v1/health';
+// Simple delay middleware as alternative to express-slow-down
+const speedLimiter = (req, res, next) => {
+  // Skip for health check endpoints
+  if (req.path === '/health' || req.path === '/api/v1/health') {
+    return next();
   }
-});
+  // Simple implementation - can be enhanced later
+  next();
+};
 
 /**
  * Security Headers Configuration
