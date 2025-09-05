@@ -296,6 +296,163 @@ const swaggerDefinition: SwaggerDefinition = {
           cpuUsage: { type: 'number', example: 15.5 },
         },
       },
+      // Response DTOs - Missing from original
+      RegisterResponseDTO: {
+        type: 'object',
+        properties: {
+          message: { type: 'string', example: 'Registration successful' },
+          userId: { type: 'string', format: 'uuid' },
+          verificationRequired: { type: 'boolean', example: true },
+          verificationMethod: { type: 'string', enum: ['EMAIL', 'SMS', 'MANUAL'], example: 'EMAIL' },
+          nextSteps: { 
+            type: 'array', 
+            items: { type: 'string' },
+            example: ['Check your email for verification link', 'Click the verification link'] 
+          },
+        },
+      },
+      LoginResponseDTO: {
+        allOf: [
+          { $ref: '#/components/schemas/AuthResponse' },
+          {
+            type: 'object',
+            properties: {
+              loginAttempts: { type: 'integer', example: 1 },
+              accountStatus: { type: 'string', example: 'ACTIVE' },
+              mustChangePassword: { type: 'boolean', example: false },
+              twoFactorRequired: { type: 'boolean', example: false },
+              deviceTrusted: { type: 'boolean', example: false },
+            },
+          },
+        ],
+      },
+      LogoutResponseDTO: {
+        type: 'object',
+        properties: {
+          message: { type: 'string', example: 'Logout successful' },
+          loggedOutAt: { type: 'string', format: 'date-time' },
+          devicesLoggedOut: { type: 'integer', example: 1 },
+        },
+      },
+      VerifyEmailResponseDTO: {
+        type: 'object',
+        properties: {
+          message: { type: 'string', example: 'Email verified successfully' },
+          emailVerified: { type: 'boolean', example: true },
+          verifiedAt: { type: 'string', format: 'date-time' },
+          canProceed: { type: 'boolean', example: true },
+        },
+      },
+      ForgotPasswordResponseDTO: {
+        type: 'object',
+        properties: {
+          message: { type: 'string', example: 'Password reset email sent' },
+          resetTokenSent: { type: 'boolean', example: true },
+          expiresIn: { type: 'integer', example: 3600 },
+          nextSteps: { 
+            type: 'array', 
+            items: { type: 'string' },
+            example: ['Check your email for reset link', 'Click the reset link', 'Enter new password'] 
+          },
+        },
+      },
+      ResetPasswordResponseDTO: {
+        type: 'object',
+        properties: {
+          message: { type: 'string', example: 'Password reset successful' },
+          passwordReset: { type: 'boolean', example: true },
+          resetAt: { type: 'string', format: 'date-time' },
+          autoLogin: { type: 'boolean', example: false },
+          tokens: { $ref: '#/components/schemas/AuthResponse', nullable: true },
+        },
+      },
+      ChangePasswordRequestDTO: {
+        type: 'object',
+        required: ['currentPassword', 'newPassword', 'confirmPassword'],
+        properties: {
+          currentPassword: { type: 'string', maxLength: 128, example: 'CurrentPass123!' },
+          newPassword: { type: 'string', minLength: 8, maxLength: 128, example: 'NewSecurePass123!' },
+          confirmPassword: { type: 'string', minLength: 8, maxLength: 128, example: 'NewSecurePass123!' },
+        },
+      },
+      UpdateProfileRequestDTO: {
+        type: 'object',
+        properties: {
+          firstName: { type: 'string', maxLength: 50, example: 'John' },
+          lastName: { type: 'string', maxLength: 50, example: 'Doe' },
+          phoneNumber: { type: 'string', maxLength: 20, example: '+1234567890' },
+          dateOfBirth: { type: 'string', format: 'date', example: '1990-01-01' },
+          timezone: { type: 'string', example: 'UTC' },
+          language: { type: 'string', example: 'en' },
+        },
+      },
+      VerifyEmailRequestDTO: {
+        type: 'object',
+        required: ['token'],
+        properties: {
+          token: { type: 'string', example: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...' },
+          email: { type: 'string', format: 'email', example: 'john.doe@example.com' },
+        },
+      },
+      ForgotPasswordRequestDTO: {
+        type: 'object',
+        required: ['email'],
+        properties: {
+          email: { type: 'string', format: 'email', example: 'john.doe@example.com' },
+          callbackUrl: { type: 'string', format: 'uri', example: 'https://app.xform.com/reset-password' },
+        },
+      },
+      ResetPasswordRequestDTO: {
+        type: 'object',
+        required: ['token', 'email', 'newPassword', 'confirmPassword'],
+        properties: {
+          token: { type: 'string', example: 'reset-token-12345' },
+          email: { type: 'string', format: 'email', example: 'john.doe@example.com' },
+          newPassword: { type: 'string', minLength: 8, maxLength: 128, example: 'NewSecurePass123!' },
+          confirmPassword: { type: 'string', minLength: 8, maxLength: 128, example: 'NewSecurePass123!' },
+        },
+      },
+      TokenInfoDTO: {
+        type: 'object',
+        properties: {
+          tokenId: { type: 'string', format: 'uuid' },
+          type: { type: 'string', enum: ['ACCESS', 'REFRESH', 'EMAIL_VERIFICATION', 'PASSWORD_RESET'], example: 'ACCESS' },
+          issuedAt: { type: 'string', format: 'date-time' },
+          expiresAt: { type: 'string', format: 'date-time' },
+          isValid: { type: 'boolean', example: true },
+          deviceId: { type: 'string', format: 'uuid', nullable: true },
+          deviceName: { type: 'string', example: 'iPhone 13', nullable: true },
+          ipAddress: { type: 'string', example: '192.168.1.1', nullable: true },
+          userAgent: { type: 'string', example: 'Mozilla/5.0...', nullable: true },
+        },
+      },
+      SecurityEventDTO: {
+        type: 'object',
+        properties: {
+          eventId: { type: 'string', format: 'uuid' },
+          type: { 
+            type: 'string', 
+            enum: ['LOGIN_SUCCESS', 'LOGIN_FAILED', 'PASSWORD_CHANGED', 'ACCOUNT_LOCKED', 'SUSPICIOUS_ACTIVITY'],
+            example: 'LOGIN_SUCCESS' 
+          },
+          userId: { type: 'string', format: 'uuid', nullable: true },
+          ipAddress: { type: 'string', example: '192.168.1.1' },
+          userAgent: { type: 'string', example: 'Mozilla/5.0...' },
+          timestamp: { type: 'string', format: 'date-time' },
+          severity: { type: 'string', enum: ['LOW', 'MEDIUM', 'HIGH', 'CRITICAL'], example: 'LOW' },
+          details: { type: 'object', additionalProperties: true },
+          location: {
+            type: 'object',
+            nullable: true,
+            properties: {
+              country: { type: 'string', example: 'United States', nullable: true },
+              city: { type: 'string', example: 'New York', nullable: true },
+              latitude: { type: 'number', example: 40.7128, nullable: true },
+              longitude: { type: 'number', example: -74.0060, nullable: true },
+            },
+          },
+        },
+      },
     },
     responses: {
       '400': {

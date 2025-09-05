@@ -12,7 +12,12 @@ import {
   MockEmailService,
 } from '../infrastructure/repositories';
 import { AuthController } from '../interface/http/auth-controller';
-import { DomainEvent } from '../domain/auth';
+import { 
+  DomainEvent, 
+  UserRegisteredEvent, 
+  UserLoginEvent, 
+  UserAccountLockedEvent 
+} from '../domain/auth';
 
 // Configuration interface
 export interface AuthServiceConfig {
@@ -165,8 +170,8 @@ export class AuthServiceContainer {
 
     // Example: Log user registration events
     eventPublisher.subscribe(
-      require('../domain/auth').UserRegisteredEvent,
-      async (event) => {
+      UserRegisteredEvent,
+      async (event: UserRegisteredEvent) => {
         console.log(`User registered: ${event.email} with provider: ${event.provider}`);
         // Here you could trigger additional actions like:
         // - Send analytics event
@@ -177,8 +182,8 @@ export class AuthServiceContainer {
 
     // Example: Log user login events for security monitoring
     eventPublisher.subscribe(
-      require('../domain/auth').UserLoginEvent,
-      async (event) => {
+      UserLoginEvent,
+      async (event: UserLoginEvent) => {
         console.log(`User login: ${event.userId} from IP: ${event.ipAddress}`);
         // Here you could:
         // - Log security events
@@ -189,8 +194,8 @@ export class AuthServiceContainer {
 
     // Example: Handle account lockout events
     eventPublisher.subscribe(
-      require('../domain/auth').UserAccountLockedEvent,
-      async (event) => {
+      UserAccountLockedEvent,
+      async (event: UserAccountLockedEvent) => {
         console.log(`Account locked: ${event.userId} - ${event.reason}`);
         // Here you could:
         // - Send security alert email

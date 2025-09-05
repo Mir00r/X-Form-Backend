@@ -7,8 +7,10 @@ import helmet from 'helmet';
 import compression from 'compression';
 import cookieParser from 'cookie-parser';
 import rateLimit from 'express-rate-limit';
+import swaggerUi from 'swagger-ui-express';
 import { createAuthServiceContainer } from './infrastructure/container';
 import { authErrorHandler } from './interface/http/auth-controller';
+import { swaggerSpec, getSwaggerHTML } from './infrastructure/swagger/swagger-config';
 
 // Application class following Single Responsibility Principle
 export class AuthServiceApp {
@@ -38,11 +40,11 @@ export class AuthServiceApp {
       contentSecurityPolicy: {
         directives: {
           defaultSrc: ["'self'"],
-          styleSrc: ["'self'", "'unsafe-inline'"],
-          scriptSrc: ["'self'"],
+          styleSrc: ["'self'", "'unsafe-inline'", "https://unpkg.com"],
+          scriptSrc: ["'self'", "https://unpkg.com"],
           imgSrc: ["'self'", "data:", "https:"],
           connectSrc: ["'self'"],
-          fontSrc: ["'self'"],
+          fontSrc: ["'self'", "https://unpkg.com"],
           objectSrc: ["'none'"],
           mediaSrc: ["'self'"],
           frameSrc: ["'none'"],
@@ -106,8 +108,114 @@ export class AuthServiceApp {
     this.app.use('/auth/register', authLimiter);
   }
 
+  private setupSwaggerDocumentation(): void {
+    // Custom swagger options with enhanced UI
+    const swaggerOptions: swaggerUi.SwaggerUiOptions = {
+      customCss: `
+        .swagger-ui .topbar { background-color: #2c3e50; }
+        .swagger-ui .info .title { color: #2c3e50; font-size: 2em; }
+        .swagger-ui .info .description p { font-size: 1.1em; line-height: 1.6; }
+        .swagger-ui .scheme-container { background: #f8f9fa; padding: 15px; border-radius: 5px; }
+        .swagger-ui .auth-wrapper { margin-top: 20px; }
+        .swagger-ui .btn.authorize { background-color: #2c3e50; border-color: #2c3e50; }
+        .swagger-ui .btn.authorize:hover { background-color: #34495e; border-color: #34495e; }
+        .swagger-ui .model-title { color: #2c3e50; }
+        .swagger-ui .operation-tag-content { font-size: 1.2em; }
+        .swagger-ui .opblock { margin-bottom: 20px; border-radius: 8px; }
+        .swagger-ui .opblock-summary { border-radius: 8px 8px 0 0; }
+        .swagger-ui .highlight-code { background: #f8f9fa; }
+        .swagger-ui .model { font-family: 'Courier New', monospace; }
+        .swagger-ui .response-col_status { font-weight: bold; }
+        .swagger-ui .parameters-col_description p { margin: 0; }
+        .swagger-ui .tab { border-radius: 4px 4px 0 0; }
+        .swagger-ui .response-col_links { font-size: 0.9em; }
+      `,
+      customSiteTitle: 'X-Form Auth Service API Documentation',
+      customfavIcon: '/favicon.ico',
+      swaggerOptions: {
+        tryItOutEnabled: true,
+        requestInterceptor: (req: any) => {
+          // Add correlation ID to all requests
+          if (!req.headers['X-Correlation-ID']) {
+            req.headers['X-Correlation-ID'] = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+              const r = Math.random() * 16 | 0;
+              const v = c === 'x' ? r : (r & 0x3 | 0x8);
+              return v.toString(16);
+            });
+          }
+          return req;
+        },
+        responseInterceptor: (res: any) => {
+          // Log API calls for development
+          if (process.env.NODE_ENV === 'development') {
+            console.log(`Swagger UI API Call: ${res.url} - Status: ${res.status}`);
+          }
+          return res;
+        },
+        docExpansion: 'list', // Show operations list expanded
+        defaultModelsExpandDepth: 2, // Expand models to 2 levels
+        defaultModelExpandDepth: 2,
+        displayRequestDuration: true, // Show request duration
+        filter: true, // Enable API filtering
+        showExtensions: true,
+        showCommonExtensions: true,
+        persistAuthorization: true, // Persist auth tokens in browser
+      },
+    };
+
+    // Main Swagger UI route with enhanced features
+    this.app.use('/api-docs', swaggerUi.serve);
+    this.app.get('/api-docs', swaggerUi.setup(swaggerSpec, swaggerOptions));
+
+    // Alternative Swagger routes for different use cases
+    this.app.get('/docs', (req, res) => {
+      res.redirect('/api-docs');
+    });
+
+    // Raw OpenAPI spec endpoint
+    this.app.get('/api-docs.json', (req, res) => {
+      res.setHeader('Content-Type', 'application/json');
+      res.setHeader('Access-Control-Allow-Origin', '*');
+      res.setHeader('Access-Control-Allow-Methods', 'GET');
+      res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+      res.send(swaggerSpec);
+    });
+
+    // Custom HTML documentation with additional features
+    this.app.get('/api-docs-custom', (req, res) => {
+      const customHTML = getSwaggerHTML(swaggerSpec);
+      res.send(customHTML);
+    });
+
+    // Health check for documentation
+    this.app.get('/api-docs/health', (req, res) => {
+      res.json({
+        success: true,
+        message: 'API Documentation is available',
+        endpoints: {
+          swaggerUI: '/api-docs',
+          openAPISpec: '/api-docs.json',
+          customDocs: '/api-docs-custom',
+          alternateRoute: '/docs',
+        },
+        features: [
+          'Interactive API testing',
+          'Request/Response examples',
+          'Authentication testing',
+          'Schema validation',
+          'Request correlation tracking',
+          'Enhanced UI with custom styling',
+        ],
+        timestamp: new Date().toISOString(),
+      });
+    });
+  }
+
   private setupRoutes(): void {
     const authController = this.container.getAuthController();
+
+    // Swagger API Documentation
+    this.setupSwaggerDocumentation();
 
     // Health check endpoint
     this.app.get('/health', async (req, res) => {

@@ -366,6 +366,114 @@ export class AuthApplicationService {
     return this.mapToUserProfile(user);
   }
 
+  // Use Case: Update User Profile
+  async updateUserProfile(userId: string, updateData: Partial<{ firstName: string; lastName: string; username: string }>): Promise<UserProfile> {
+    const user = await this.userRepository.findById(userId);
+    if (!user) {
+      throw new UserNotFoundError(userId);
+    }
+
+    // Create updated user object
+    const updatedUser = new User(
+      user.id,
+      user.email,
+      updateData.username || user.username,
+      updateData.firstName || user.firstName,
+      updateData.lastName || user.lastName,
+      user.password,
+      user.role,
+      user.emailVerified,
+      user.accountLocked,
+      user.loginAttempts,
+      user.lastLoginAt,
+      user.createdAt,
+      new Date(), // Updated timestamp
+      user.deletedAt,
+      user.provider,
+      user.providerId,
+      user.metadata
+    );
+
+    const savedUser = await this.userRepository.update(updatedUser);
+    return this.mapToUserProfile(savedUser);
+  }
+
+  // Use Case: Resend Verification Email
+  async resendVerificationEmail(userId: string): Promise<void> {
+    const user = await this.userRepository.findById(userId);
+    if (!user) {
+      throw new UserNotFoundError(userId);
+    }
+
+    if (user.emailVerified) {
+      throw new Error('Email is already verified');
+    }
+
+    // Generate new verification token
+    const verificationToken = this.tokenService.generateVerificationToken();
+
+    // Save verification token
+    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
+    await this.emailVerificationRepository.saveVerificationToken(user.id, verificationToken, expiresAt);
+
+    // Send verification email
+    await this.emailService.sendVerificationEmail(
+      user.email,
+      verificationToken
+    );
+  }
+
+  // Use Case: Change Password
+  async changePassword(userId: string, currentPassword: string, newPassword: string): Promise<void> {
+    const user = await this.userRepository.findById(userId);
+    if (!user) {
+      throw new UserNotFoundError(userId);
+    }
+
+    // Verify current password
+    if (user.password) {
+      const currentPasswordObj = new Password(currentPassword);
+      const isCurrentPasswordValid = await this.passwordHashingService.compare(
+        currentPasswordObj,
+        user.password.getValue()
+      );
+      
+      if (!isCurrentPasswordValid) {
+        throw new InvalidCredentialsError();
+      }
+    } else {
+      throw new Error('Cannot change password for OAuth users');
+    }
+
+    // Create new password hash
+    const newPasswordObj = new Password(newPassword);
+    const newPasswordHash = await this.passwordHashingService.hash(newPasswordObj);
+    const hashedPasswordObj = new Password(newPasswordHash);
+
+    // Update user with new password
+    const updatedUser = new User(
+      user.id,
+      user.email,
+      user.username,
+      user.firstName,
+      user.lastName,
+      hashedPasswordObj,
+      user.role,
+      user.emailVerified,
+      user.accountLocked,
+      user.loginAttempts,
+      user.lastLoginAt,
+      user.createdAt,
+      new Date(), // Updated timestamp
+      user.deletedAt,
+      user.provider,
+      user.providerId,
+      user.metadata
+    );
+
+    await this.userRepository.update(updatedUser);
+  }
+
   // Private helper methods following Single Responsibility Principle
   private generateTokens(user: User): { accessToken: string; refreshToken: string } {
     const payload = {
