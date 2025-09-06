@@ -1,9 +1,9 @@
 """
-Analytics Service Data Models
+Analytics Service Data Models with Comprehensive Swagger Documentation
 """
 from typing import Any, Dict, List, Optional, Union
 from datetime import datetime, date
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, validator
 from enum import Enum
 
 
@@ -78,19 +78,87 @@ class QuestionAnalyticsParams(AnalyticsQueryParams):
 
 
 # Response Models
+class AnalyticsResponse(BaseModel):
+    """Standard analytics API response model."""
+    success: bool = Field(description="Whether the request was successful")
+    message: str = Field(description="Human-readable response message")
+    data: Optional[Dict[str, Any]] = Field(description="Response data payload")
+    timestamp: datetime = Field(description="Response timestamp in UTC")
+    request_id: Optional[str] = Field(description="Unique request identifier for tracking")
+    
+    class Config:
+        schema_extra = {
+            "example": {
+                "success": True,
+                "message": "Analytics data retrieved successfully",
+                "data": {
+                    "form_id": "550e8400-e29b-41d4-a716-446655440000",
+                    "total_responses": 1523,
+                    "completion_rate": 84.6
+                },
+                "timestamp": "2025-09-06T12:00:00Z",
+                "request_id": "req_abc123def456"
+            }
+        }
+
+class ErrorResponse(BaseModel):
+    """Standard error response model."""
+    success: bool = Field(default=False, description="Always false for error responses")
+    error: str = Field(description="Error type or code")
+    message: str = Field(description="Human-readable error message")
+    details: Optional[Dict[str, Any]] = Field(description="Additional error details")
+    timestamp: datetime = Field(description="Error timestamp in UTC")
+    request_id: Optional[str] = Field(description="Request identifier for troubleshooting")
+    
+    class Config:
+        schema_extra = {
+            "example": {
+                "success": False,
+                "error": "validation_error",
+                "message": "Invalid form ID format",
+                "details": {
+                    "field": "form_id",
+                    "expected": "UUID format",
+                    "received": "invalid_string"
+                },
+                "timestamp": "2025-09-06T12:00:00Z",
+                "request_id": "req_abc123def456"
+            }
+        }
+
 class FormSummary(BaseModel):
-    """Form analytics summary."""
-    form_id: str
-    title: str
-    total_responses: int
-    completed_responses: int
-    partial_responses: int
-    average_completion_time: Optional[float]  # in seconds
-    completion_rate: float  # percentage
-    first_response_date: Optional[datetime]
-    last_response_date: Optional[datetime]
-    unique_respondents: int
-    response_rate_trend: List[Dict[str, Any]]  # last 7 days
+    """Form analytics summary with comprehensive metrics."""
+    form_id: str = Field(description="Unique form identifier")
+    title: str = Field(description="Form title")
+    total_responses: int = Field(description="Total number of responses received", ge=0)
+    completed_responses: int = Field(description="Number of completed responses", ge=0)
+    partial_responses: int = Field(description="Number of partial responses", ge=0)
+    average_completion_time: Optional[float] = Field(description="Average completion time in seconds", ge=0)
+    completion_rate: float = Field(description="Completion rate as percentage", ge=0, le=100)
+    first_response_date: Optional[datetime] = Field(description="Date of first response")
+    last_response_date: Optional[datetime] = Field(description="Date of most recent response")
+    unique_respondents: int = Field(description="Number of unique respondents", ge=0)
+    response_rate_trend: List[Dict[str, Any]] = Field(description="Response rate trend over last 7 days")
+    
+    class Config:
+        schema_extra = {
+            "example": {
+                "form_id": "550e8400-e29b-41d4-a716-446655440000",
+                "title": "Customer Satisfaction Survey",
+                "total_responses": 1523,
+                "completed_responses": 1289,
+                "partial_responses": 234,
+                "average_completion_time": 145.7,
+                "completion_rate": 84.6,
+                "first_response_date": "2025-08-01T09:30:00Z",
+                "last_response_date": "2025-09-06T11:45:00Z",
+                "unique_respondents": 1456,
+                "response_rate_trend": [
+                    {"date": "2025-09-05", "responses": 45, "completion_rate": 86.7},
+                    {"date": "2025-09-06", "responses": 52, "completion_rate": 84.6}
+                ]
+            }
+        }
 
 
 class QuestionSummary(BaseModel):

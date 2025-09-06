@@ -53,7 +53,7 @@
                               ▼                    ▼                    ▼
                    ┌─────────────────────┐ ┌─────────────────┐ ┌─────────────────────┐
                    │ Real-time Service   │ │Analytics Service│ │  File Service       │
-                   │      (Go)           │ │   (Python)      │ │  (AWS Lambda)       │
+                   │      (Go)           │ │   (Python)      │ │  (AWS Lambda, Python)       │
                    │   Port: 8002        │ │  Port: 5001     │ │     S3 + API        │
                    └─────────────────────┘ └─────────────────┘ └─────────────────────┘
                               │                    │                    │
