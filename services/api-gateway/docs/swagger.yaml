@@ -1,0 +1,924 @@
+basePath: /api/v1
+definitions:
+  handlers.APIResponse:
+    properties:
+      data: {}
+      message:
+        example: Operation completed successfully
+        type: string
+      success:
+        example: true
+        type: boolean
+      timestamp:
+        example: "2025-09-06T12:00:00Z"
+        type: string
+    type: object
+  handlers.AnalyticsResponse:
+    properties:
+      average_completion_time:
+        example: 2m30s
+        type: string
+      completion_rate:
+        example: 85.5
+        type: number
+      form_id:
+        example: 123e4567-e89b-12d3-a456-426614174000
+        type: string
+      responses_today:
+        example: 5
+        type: integer
+      top_countries:
+        additionalProperties:
+          type: integer
+        type: object
+      total_responses:
+        example: 150
+        type: integer
+    type: object
+  handlers.AuthRequest:
+    properties:
+      email:
+        example: user@example.com
+        type: string
+      password:
+        example: password123
+        minLength: 8
+        type: string
+    required:
+    - email
+    - password
+    type: object
+  handlers.AuthResponse:
+    properties:
+      expires_at:
+        example: "2025-09-06T13:00:00Z"
+        type: string
+      refresh_token:
+        example: refresh_token_here
+        type: string
+      token:
+        example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+        type: string
+      user:
+        $ref: '#/definitions/handlers.UserInfo'
+    type: object
+  handlers.ErrorResponse:
+    properties:
+      code:
+        example: INVALID_REQUEST
+        type: string
+      error:
+        example: Invalid request
+        type: string
+      success:
+        example: false
+        type: boolean
+      timestamp:
+        example: "2025-09-06T12:00:00Z"
+        type: string
+    type: object
+  handlers.FormField:
+    properties:
+      id:
+        example: field_1
+        type: string
+      label:
+        example: Full Name
+        type: string
+      options:
+        items:
+          type: string
+        type: array
+      placeholder:
+        example: Enter your full name
+        type: string
+      required:
+        example: true
+        type: boolean
+      type:
+        example: text
+        type: string
+    type: object
+  handlers.FormRequest:
+    properties:
+      description:
+        example: Please provide your feedback
+        type: string
+      fields:
+        items:
+          $ref: '#/definitions/handlers.FormField'
+        type: array
+      is_public:
+        example: true
+        type: boolean
+      title:
+        example: Customer Feedback Form
+        type: string
+    required:
+    - title
+    type: object
+  handlers.FormResponse:
+    properties:
+      created_at:
+        example: "2025-09-06T12:00:00Z"
+        type: string
+      description:
+        example: Please provide your feedback
+        type: string
+      fields:
+        items:
+          $ref: '#/definitions/handlers.FormField'
+        type: array
+      id:
+        example: 123e4567-e89b-12d3-a456-426614174000
+        type: string
+      is_public:
+        example: true
+        type: boolean
+      is_published:
+        example: true
+        type: boolean
+      owner:
+        $ref: '#/definitions/handlers.UserInfo'
+      title:
+        example: Customer Feedback Form
+        type: string
+      updated_at:
+        example: "2025-09-06T12:00:00Z"
+        type: string
+    type: object
+  handlers.HealthResponse:
+    properties:
+      service:
+        example: api-gateway
+        type: string
+      status:
+        example: healthy
+        type: string
+      timestamp:
+        example: "2025-09-06T12:00:00Z"
+        type: string
+      version:
+        example: 1.0.0
+        type: string
+    type: object
+  handlers.RegisterRequest:
+    properties:
+      email:
+        example: john@example.com
+        type: string
+      name:
+        example: John Doe
+        minLength: 2
+        type: string
+      password:
+        example: password123
+        minLength: 8
+        type: string
+    required:
+    - email
+    - name
+    - password
+    type: object
+  handlers.ResponseSubmissionRequest:
+    properties:
+      answers:
+        additionalProperties: true
+        type: object
+      form_id:
+        example: 123e4567-e89b-12d3-a456-426614174000
+        type: string
+    required:
+    - answers
+    - form_id
+    type: object
+  handlers.ResponseSubmissionResponse:
+    properties:
+      answers:
+        additionalProperties: true
+        type: object
+      form_id:
+        example: 123e4567-e89b-12d3-a456-426614174000
+        type: string
+      id:
+        example: 123e4567-e89b-12d3-a456-426614174000
+        type: string
+      ip_address:
+        example: 192.168.1.1
+        type: string
+      submitted_at:
+        example: "2025-09-06T12:00:00Z"
+        type: string
+    type: object
+  handlers.UserInfo:
+    properties:
+      email:
+        example: john@example.com
+        type: string
+      id:
+        example: 123e4567-e89b-12d3-a456-426614174000
+        type: string
+      name:
+        example: John Doe
+        type: string
+      role:
+        example: user
+        type: string
+    type: object
+host: localhost:8080
+info:
+  contact:
+    email: support@swagger.io
+    name: API Support
+    url: http://www.swagger.io/support
+  description: A comprehensive API Gateway for X-Form microservices
+  license:
+    name: Apache 2.0
+    url: http://www.apache.org/licenses/LICENSE-2.0.html
+  termsOfService: http://swagger.io/terms/
+  title: API Gateway
+  version: "1.0"
+paths:
+  /api/v1/analytics/dashboard:
+    get:
+      consumes:
+      - application/json
+      description: Get comprehensive analytics dashboard data
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handlers.AnalyticsResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get Analytics Dashboard
+      tags:
+      - Analytics
+  /api/v1/analytics/forms/{formId}:
+    get:
+      consumes:
+      - application/json
+      description: Get analytics data for a specific form
+      parameters:
+      - description: Form ID
+        in: path
+        name: formId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handlers.AnalyticsResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get Form Analytics
+      tags:
+      - Analytics
+  /api/v1/analytics/responses/{responseId}:
+    get:
+      consumes:
+      - application/json
+      description: Get analytics data for a specific response
+      parameters:
+      - description: Response ID
+        in: path
+        name: responseId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handlers.AnalyticsResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get Response Analytics
+      tags:
+      - Analytics
+  /api/v1/auth/login:
+    post:
+      consumes:
+      - application/json
+      description: Authenticate user and return JWT token
+      parameters:
+      - description: Login credentials
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.AuthRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handlers.AuthResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      summary: User Login
+      tags:
+      - Authentication
+  /api/v1/auth/logout:
+    post:
+      consumes:
+      - application/json
+      description: Logout user and invalidate token
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handlers.APIResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: User Logout
+      tags:
+      - Authentication
+  /api/v1/auth/profile:
+    delete:
+      consumes:
+      - application/json
+      description: Delete current user account
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handlers.APIResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Delete User Profile
+      tags:
+      - Authentication
+    get:
+      consumes:
+      - application/json
+      description: Get current user profile information
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handlers.UserInfo'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get User Profile
+      tags:
+      - Authentication
+    put:
+      consumes:
+      - application/json
+      description: Update current user profile information
+      parameters:
+      - description: Updated profile information
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.UserInfo'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handlers.UserInfo'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Update User Profile
+      tags:
+      - Authentication
+  /api/v1/auth/refresh:
+    post:
+      consumes:
+      - application/json
+      description: Refresh JWT token using refresh token
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handlers.AuthResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      summary: Refresh Token
+      tags:
+      - Authentication
+  /api/v1/auth/register:
+    post:
+      consumes:
+      - application/json
+      description: Register a new user account
+      parameters:
+      - description: Registration request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.RegisterRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/handlers.AuthResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      summary: Register User
+      tags:
+      - Authentication
+  /api/v1/forms:
+    get:
+      consumes:
+      - application/json
+      description: Get list of forms (public forms or user's forms if authenticated)
+      parameters:
+      - default: 1
+        description: Page number
+        in: query
+        name: page
+        type: integer
+      - default: 10
+        description: Items per page
+        in: query
+        name: limit
+        type: integer
+      - description: Search query
+        in: query
+        name: search
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/handlers.FormResponse'
+            type: array
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      summary: List Forms
+      tags:
+      - Forms
+    post:
+      consumes:
+      - application/json
+      description: Create a new form
+      parameters:
+      - description: Form data
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.FormRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/handlers.FormResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Create Form
+      tags:
+      - Forms
+  /api/v1/forms/{id}:
+    delete:
+      consumes:
+      - application/json
+      description: Delete a form
+      parameters:
+      - description: Form ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handlers.APIResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Delete Form
+      tags:
+      - Forms
+    get:
+      consumes:
+      - application/json
+      description: Get form details by ID
+      parameters:
+      - description: Form ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handlers.FormResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      summary: Get Form
+      tags:
+      - Forms
+    put:
+      consumes:
+      - application/json
+      description: Update form details
+      parameters:
+      - description: Form ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Updated form data
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.FormRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handlers.FormResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Update Form
+      tags:
+      - Forms
+  /api/v1/forms/{id}/publish:
+    post:
+      consumes:
+      - application/json
+      description: Make form publicly available
+      parameters:
+      - description: Form ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handlers.APIResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Publish Form
+      tags:
+      - Forms
+  /api/v1/forms/{id}/unpublish:
+    post:
+      consumes:
+      - application/json
+      description: Make form private (remove from public access)
+      parameters:
+      - description: Form ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handlers.APIResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Unpublish Form
+      tags:
+      - Forms
+  /api/v1/responses:
+    get:
+      consumes:
+      - application/json
+      description: Get list of form responses
+      parameters:
+      - description: Filter by form ID
+        in: query
+        name: form_id
+        type: string
+      - default: 1
+        description: Page number
+        in: query
+        name: page
+        type: integer
+      - default: 10
+        description: Items per page
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/handlers.ResponseSubmissionResponse'
+            type: array
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: List Responses
+      tags:
+      - Responses
+  /api/v1/responses/{formId}/submit:
+    post:
+      consumes:
+      - application/json
+      description: Submit a response to a form
+      parameters:
+      - description: Form ID
+        in: path
+        name: formId
+        required: true
+        type: string
+      - description: Response data
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.ResponseSubmissionRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/handlers.ResponseSubmissionResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      summary: Submit Response
+      tags:
+      - Responses
+  /api/v1/responses/{id}:
+    delete:
+      consumes:
+      - application/json
+      description: Delete a response
+      parameters:
+      - description: Response ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handlers.APIResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Delete Response
+      tags:
+      - Responses
+    get:
+      consumes:
+      - application/json
+      description: Get response details by ID
+      parameters:
+      - description: Response ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handlers.ResponseSubmissionResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get Response
+      tags:
+      - Responses
+    put:
+      consumes:
+      - application/json
+      description: Update response data
+      parameters:
+      - description: Response ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Updated response data
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.ResponseSubmissionRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handlers.ResponseSubmissionResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Update Response
+      tags:
+      - Responses
+  /health:
+    get:
+      consumes:
+      - application/json
+      description: Get the health status of the API Gateway
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handlers.HealthResponse'
+        "503":
+          description: Service Unavailable
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      summary: Health Check
+      tags:
+      - System
+securityDefinitions:
+  BearerAuth:
+    description: Type "Bearer" followed by a space and JWT token.
+    in: header
+    name: Authorization
+    type: apiKey
+swagger: "2.0"

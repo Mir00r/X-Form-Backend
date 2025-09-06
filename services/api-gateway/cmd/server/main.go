@@ -1,197 +1,133 @@
 package main
 
 import (
-	"context"
-	"fmt"
 	"log"
-	"net/http"
 	"os"
-	"os/signal"
-	"syscall"
-	"time"
 
-	"github.com/Mir00r/X-Form-Backend/services/api-gateway/internal/config"
-	"github.com/Mir00r/X-Form-Backend/services/api-gateway/internal/gateway"
-	"github.com/Mir00r/X-Form-Backend/services/api-gateway/internal/middleware"
-	"github.com/Mir00r/X-Form-Backend/services/api-gateway/internal/proxy"
 	"github.com/gin-gonic/gin"
+	"github.com/joho/godotenv"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
-	"github.com/sirupsen/logrus"
+	swaggerFiles "github.com/swaggo/files"
+	ginSwagger "github.com/swaggo/gin-swagger"
+
+	_ "github.com/Mir00r/X-Form-Backend/services/api-gateway/docs" // Import for swagger
+	"github.com/Mir00r/X-Form-Backend/services/api-gateway/internal/handlers"
+	"github.com/Mir00r/X-Form-Backend/services/api-gateway/internal/middleware"
 )
 
-func main() {
-	// Load configuration
-	cfg := config.Load()
+// @title           API Gateway
+// @version         1.0
+// @description     A comprehensive API Gateway for X-Form microservices
+// @termsOfService  http://swagger.io/terms/
 
-	// Setup logging
-	logrus.SetLevel(logrus.InfoLevel)
-	if cfg.Environment == "development" {
-		logrus.SetLevel(logrus.DebugLevel)
+// @contact.name   API Support
+// @contact.url    http://www.swagger.io/support
+// @contact.email  support@swagger.io
+
+// @license.name  Apache 2.0
+// @license.url   http://www.apache.org/licenses/LICENSE-2.0.html
+
+// @host      localhost:8080
+// @BasePath  /api/v1
+
+// @securityDefinitions.apikey BearerAuth
+// @in header
+// @name Authorization
+// @description Type "Bearer" followed by a space and JWT token.
+
+func main() {
+	// Load environment variables
+	if err := godotenv.Load(); err != nil {
+		log.Println("No .env file found, using environment variables")
+	}
+
+	// Get JWT secret from environment
+	jwtSecret := os.Getenv("JWT_SECRET")
+	if jwtSecret == "" {
+		jwtSecret = "your-secret-key-change-this-in-production"
+		log.Println("Warning: Using default JWT secret. Set JWT_SECRET environment variable for production.")
 	}
 
 	// Set Gin mode
-	if cfg.Environment == "production" {
+	if os.Getenv("GIN_MODE") == "release" {
 		gin.SetMode(gin.ReleaseMode)
 	}
 
-	// Initialize proxy manager
-	proxyManager := proxy.NewManager(cfg)
+	// Initialize router
+	r := gin.Default()
 
-	// Initialize gateway
-	gatewayInstance := gateway.New(cfg, proxyManager)
+	// Add middleware
+	r.Use(middleware.RequestID())
+	r.Use(middleware.RequestLogger())
+	r.Use(middleware.CORS())
+	r.Use(middleware.SecurityHeaders())
+	r.Use(middleware.Recovery())
 
-	// Setup router
-	router := setupRouter(cfg, gatewayInstance)
-
-	// Setup metrics server
-	go func() {
-		metricsRouter := gin.New()
-		metricsRouter.GET("/metrics", gin.WrapH(promhttp.Handler()))
-		metricsRouter.GET("/health", func(c *gin.Context) {
-			c.JSON(http.StatusOK, gin.H{"status": "healthy"})
-		})
-
-		log.Printf("Metrics server starting on port %s", cfg.MetricsPort)
-		if err := http.ListenAndServe(":"+cfg.MetricsPort, metricsRouter); err != nil {
-			log.Printf("Metrics server error: %v", err)
-		}
-	}()
-
-	// Setup main server
-	server := &http.Server{
-		Addr:         fmt.Sprintf(":%s", cfg.Port),
-		Handler:      router,
-		ReadTimeout:  30 * time.Second,
-		WriteTimeout: 30 * time.Second,
-		IdleTimeout:  120 * time.Second,
-	}
-
-	// Start server in a goroutine
-	go func() {
-		log.Printf("API Gateway starting on port %s", cfg.Port)
-		log.Printf("Environment: %s", cfg.Environment)
-		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			log.Fatalf("Failed to start server: %v", err)
-		}
-	}()
-
-	// Wait for interrupt signal to gracefully shutdown the server
-	quit := make(chan os.Signal, 1)
-	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
-	<-quit
-	log.Println("Shutting down API Gateway...")
-
-	// Give outstanding requests 30 seconds to complete
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-
-	if err := server.Shutdown(ctx); err != nil {
-		log.Fatalf("Server forced to shutdown: %v", err)
-	}
-
-	log.Println("API Gateway exiting")
-}
-
-func setupRouter(cfg *config.Config, gateway *gateway.Gateway) *gin.Engine {
-	router := gin.New()
-
-	// Global middleware
-	router.Use(gin.LoggerWithConfig(gin.LoggerConfig{
-		Formatter: gin.DefaultLogFormatter,
-		SkipPaths: []string{"/health", "/metrics"},
-	}))
-	router.Use(gin.Recovery())
-	router.Use(middleware.CORS())
-	router.Use(middleware.RequestID())
-	router.Use(middleware.RequestLogger())
-	router.Use(middleware.Metrics())
+	// Metrics endpoint
+	r.GET("/metrics", gin.WrapH(promhttp.Handler()))
 
 	// Health check endpoint
-	router.GET("/health", func(c *gin.Context) {
-		c.JSON(http.StatusOK, gin.H{
-			"status":    "healthy",
-			"service":   "api-gateway",
-			"timestamp": time.Now().UTC().Format(time.RFC3339),
-			"version":   cfg.Version,
-		})
-	})
+	r.GET("/health", handlers.HealthCheck)
 
-	// API versioned routes
-	v1 := router.Group("/api/v1")
+	// Swagger documentation
+	r.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
+
+	// API v1 routes
+	v1 := r.Group("/api/v1")
 	{
-		// Auth routes (no auth required)
-		authGroup := v1.Group("/auth")
+		// Auth service routes
+		auth := v1.Group("/auth")
 		{
-			authGroup.Any("/*path", gateway.ProxyToAuth)
+			auth.POST("/register", handlers.Register)
+			auth.POST("/login", handlers.Login)
+			auth.POST("/logout", middleware.AuthRequired(jwtSecret), handlers.Logout)
+			auth.POST("/refresh", handlers.RefreshToken)
+			auth.GET("/profile", middleware.AuthRequired(jwtSecret), handlers.GetProfile)
+			auth.PUT("/profile", middleware.AuthRequired(jwtSecret), handlers.UpdateProfile)
+			auth.DELETE("/profile", middleware.AuthRequired(jwtSecret), handlers.DeleteProfile)
 		}
 
-		// User routes (auth required)
-		userGroup := v1.Group("/user")
-		userGroup.Use(middleware.AuthRequired(cfg.JWTSecret))
+		// Form service routes
+		forms := v1.Group("/forms")
 		{
-			userGroup.Any("/*path", gateway.ProxyToAuth)
+			forms.GET("", middleware.OptionalAuth(jwtSecret), handlers.ListForms)
+			forms.POST("", middleware.AuthRequired(jwtSecret), handlers.CreateForm)
+			forms.GET("/:id", middleware.OptionalAuth(jwtSecret), handlers.GetForm)
+			forms.PUT("/:id", middleware.AuthRequired(jwtSecret), handlers.UpdateForm)
+			forms.DELETE("/:id", middleware.AuthRequired(jwtSecret), handlers.DeleteForm)
+			forms.POST("/:id/publish", middleware.AuthRequired(jwtSecret), handlers.PublishForm)
+			forms.POST("/:id/unpublish", middleware.AuthRequired(jwtSecret), handlers.UnpublishForm)
 		}
 
-		// Form routes (auth required)
-		formsGroup := v1.Group("/forms")
-		formsGroup.Use(middleware.AuthRequired(cfg.JWTSecret))
+		// Response service routes
+		responses := v1.Group("/responses")
 		{
-			formsGroup.Any("/*path", gateway.ProxyToForm)
+			responses.GET("", middleware.AuthRequired(jwtSecret), handlers.ListResponses)
+			responses.POST("/:formId/submit", handlers.SubmitResponse)
+			responses.GET("/:id", middleware.AuthRequired(jwtSecret), handlers.GetResponse)
+			responses.PUT("/:id", middleware.AuthRequired(jwtSecret), handlers.UpdateResponse)
+			responses.DELETE("/:id", middleware.AuthRequired(jwtSecret), handlers.DeleteResponse)
 		}
 
-		// Response routes (mixed auth)
-		responsesGroup := v1.Group("/responses")
+		// Analytics service routes (protected)
+		analytics := v1.Group("/analytics", middleware.AuthRequired(jwtSecret))
 		{
-			// Public submission endpoint
-			responsesGroup.POST("/:formId/submit", gateway.ProxyToResponse)
-
-			// Protected endpoints
-			protectedResponses := responsesGroup.Group("")
-			protectedResponses.Use(middleware.AuthRequired(cfg.JWTSecret))
-			{
-				protectedResponses.Any("/*path", gateway.ProxyToResponse)
-			}
-		}
-
-		// Analytics routes (auth required)
-		analyticsGroup := v1.Group("/analytics")
-		analyticsGroup.Use(middleware.AuthRequired(cfg.JWTSecret))
-		{
-			analyticsGroup.Any("/*path", gateway.ProxyToAnalytics)
-		}
-
-		// File routes (auth required)
-		filesGroup := v1.Group("/files")
-		filesGroup.Use(middleware.AuthRequired(cfg.JWTSecret))
-		{
-			filesGroup.Any("/*path", gateway.ProxyToFile)
+			analytics.GET("/forms/:formId", handlers.GetFormAnalytics)
+			analytics.GET("/responses/:responseId", handlers.GetResponseAnalytics)
+			analytics.GET("/dashboard", handlers.GetDashboard)
 		}
 	}
 
-	// Public form access (no /api prefix)
-	publicForms := router.Group("/forms")
-	{
-		publicForms.GET("/:formId", gateway.ProxyToForm)
-		publicForms.POST("/:formId/submit", gateway.ProxyToResponse)
+	// Get port from environment or use default
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "8080"
 	}
 
-	// WebSocket proxy (handled by Traefik directly to real-time service)
-	// This is just for documentation - actual WS traffic bypasses gateway
-	router.GET("/ws/info", func(c *gin.Context) {
-		c.JSON(http.StatusOK, gin.H{
-			"message":   "WebSocket traffic is handled directly by Traefik",
-			"endpoint":  "ws://ws.xform.dev/forms/:id/updates",
-			"protocols": []string{"ws", "wss"},
-		})
-	})
+	log.Printf("API Gateway starting on port %s", port)
+	log.Printf("Swagger documentation available at: http://localhost:%s/swagger/index.html", port)
 
-	// 404 handler
-	router.NoRoute(func(c *gin.Context) {
-		c.JSON(http.StatusNotFound, gin.H{
-			"error":   "Route not found",
-			"message": fmt.Sprintf("Cannot %s %s", c.Request.Method, c.Request.URL.Path),
-		})
-	})
-
-	return router
+	if err := r.Run(":" + port); err != nil {
+		log.Fatalf("Failed to start server: %v", err)
+	}
 }
