@@ -1,0 +1,266 @@
+# Event Bus Service Configuration
+# This file contains the default configuration for the Event Bus Service
+# Environment variables will override these values
+
+# Server Configuration
+server:
+  host: "0.0.0.0"
+  port: 8080
+  read_timeout: "30s"
+  write_timeout: "30s"
+  idle_timeout: "60s"
+  shutdown_timeout: "30s"
+  max_header_bytes: 1048576
+
+# Kafka Configuration
+kafka:
+  brokers:
+    - "localhost:9092"
+  client_id: "event-bus-service"
+  group_id: "event-bus-group"
+  version: "3.5.0"
+  
+  # Producer settings
+  producer:
+    max_message_bytes: 1000000
+    required_acks: 1
+    timeout: "10s"
+    retry:
+      max: 3
+      backoff: "100ms"
+    compression: "snappy"
+    flush:
+      frequency: "500ms"
+      messages: 100
+      bytes: 65536
+  
+  # Consumer settings
+  consumer:
+    session_timeout: "30s"
+    heartbeat_interval: "3s"
+    rebalance_timeout: "60s"
+    retry_backoff: "2s"
+    fetch:
+      min: 1
+      default: 1048576
+      max: 10485760
+    max_wait_time: "250ms"
+    auto_commit_interval: "1s"
+  
+  # Admin settings
+  admin:
+    timeout: "30s"
+  
+  # Security settings
+  security:
+    enabled: false
+    protocol: "PLAINTEXT"
+    sasl:
+      mechanism: "PLAIN"
+      username: ""
+      password: ""
+    tls:
+      enabled: false
+      cert_file: ""
+      key_file: ""
+      ca_file: ""
+      insecure_skip_verify: false
+
+# Debezium Configuration
+debezium:
+  connect_url: "http://localhost:8083"
+  timeout: "30s"
+  retry:
+    max_attempts: 3
+    backoff: "5s"
+  
+  # Connector settings
+  connectors:
+    postgres:
+      name: "postgres-connector"
+      config:
+        connector.class: "io.debezium.connector.postgresql.PostgresConnector"
+        database.hostname: "localhost"
+        database.port: 5432
+        database.user: "eventbus"
+        database.password: "eventbus_password"
+        database.dbname: "eventbus"
+        database.server.name: "eventbus"
+        table.include.list: "public.forms,public.responses,public.analytics"
+        plugin.name: "pgoutput"
+        slot.name: "eventbus_slot"
+        publication.name: "eventbus_publication"
+        key.converter: "org.apache.kafka.connect.json.JsonConverter"
+        value.converter: "org.apache.kafka.connect.json.JsonConverter"
+        key.converter.schemas.enable: false
+        value.converter.schemas.enable: false
+        transforms: "route"
+        transforms.route.type: "org.apache.kafka.connect.transforms.RegexRouter"
+        transforms.route.regex: "([^.]+)\\.([^.]+)\\.([^.]+)"
+        transforms.route.replacement: "cdc.$3"
+
+# Database Configuration
+database:
+  primary:
+    host: "localhost"
+    port: 5432
+    name: "eventbus"
+    user: "eventbus"
+    password: "eventbus_password"
+    ssl_mode: "disable"
+    max_open_conns: 25
+    max_idle_conns: 5
+    conn_max_lifetime: "5m"
+    conn_max_idle_time: "5m"
+  
+  replica:
+    enabled: false
+    host: ""
+    port: 5432
+    name: ""
+    user: ""
+    password: ""
+    ssl_mode: "disable"
+
+# Redis Configuration
+redis:
+  host: "localhost"
+  port: 6379
+  password: ""
+  db: 0
+  pool_size: 10
+  min_idle_conns: 1
+  dial_timeout: "5s"
+  read_timeout: "3s"
+  write_timeout: "3s"
+  pool_timeout: "4s"
+  idle_timeout: "5m"
+  idle_check_frequency: "1m"
+  max_retries: 3
+  min_retry_backoff: "8ms"
+  max_retry_backoff: "512ms"
+
+# Security Configuration
+security:
+  jwt:
+    secret: "your-jwt-secret-key"
+    expiration: "24h"
+    refresh_expiration: "7d"
+  
+  encryption:
+    key: "32-character-encryption-key"
+    algorithm: "AES-256-GCM"
+  
+  rate_limiting:
+    enabled: true
+    requests_per_minute: 1000
+    burst: 100
+
+# Observability Configuration
+observability:
+  # Metrics
+  metrics:
+    enabled: true
+    port: 9090
+    path: "/metrics"
+    namespace: "event_bus"
+    subsystem: "service"
+  
+  # Logging
+  logging:
+    level: "info"
+    format: "json"
+    output: "stdout"
+    file:
+      enabled: false
+      path: "/app/logs/event-bus.log"
+      max_size: 100
+      max_backups: 5
+      max_age: 7
+      compress: true
+  
+  # Tracing
+  tracing:
+    enabled: false
+    service_name: "event-bus-service"
+    jaeger:
+      endpoint: "http://localhost:14268/api/traces"
+      sampling_rate: 0.1
+
+# Event Processing Configuration
+event_processing:
+  workers: 4
+  batch_size: 100
+  batch_timeout: "5s"
+  max_retries: 3
+  retry_backoff: "1s"
+  error_topic: "events.errors"
+  dead_letter_topic: "events.dead_letter"
+  
+  # Processors
+  processors:
+    cdc_processor:
+      enabled: true
+      workers: 2
+      topics:
+        - "cdc.forms"
+        - "cdc.responses"
+        - "cdc.analytics"
+    
+    form_processor:
+      enabled: true
+      workers: 1
+      topics:
+        - "form.created"
+        - "form.updated"
+        - "form.deleted"
+    
+    response_processor:
+      enabled: true
+      workers: 1
+      topics:
+        - "response.submitted"
+        - "response.updated"
+        - "response.deleted"
+    
+    analytics_processor:
+      enabled: true
+      workers: 1
+      topics:
+        - "analytics.event"
+        - "analytics.aggregate"
+
+# Health Check Configuration
+health:
+  timeout: "30s"
+  interval: "30s"
+  checks:
+    kafka:
+      enabled: true
+      timeout: "10s"
+    debezium:
+      enabled: true
+      timeout: "10s"
+    database:
+      enabled: true
+      timeout: "5s"
+    redis:
+      enabled: true
+      timeout: "3s"
+
+# Circuit Breaker Configuration
+circuit_breaker:
+  kafka:
+    max_requests: 3
+    interval: "60s"
+    timeout: "30s"
+  
+  debezium:
+    max_requests: 3
+    interval: "60s"
+    timeout: "30s"
+  
+  database:
+    max_requests: 5
+    interval: "60s"
+    timeout: "10s"
