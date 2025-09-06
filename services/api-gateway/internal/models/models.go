@@ -128,27 +128,6 @@ type FormField struct {
 	Order      int                    `json:"order" example:"1"`
 }
 
-// FormSettings represents form settings
-type FormSettings struct {
-	IsPublic       bool       `json:"is_public" example:"true"`
-	AllowAnonymous bool       `json:"allow_anonymous" example:"false"`
-	MaxResponses   int        `json:"max_responses" example:"1000"`
-	ExpiresAt      *time.Time `json:"expires_at,omitempty"`
-	RequireAuth    bool       `json:"require_auth" example:"false"`
-	NotifyOnSubmit bool       `json:"notify_on_submit" example:"true"`
-}
-
-// FormResponse represents a response to a form
-type FormResponse struct {
-	ID        string                 `json:"id" example:"response-123"`
-	FormID    string                 `json:"form_id" example:"form-123"`
-	UserID    string                 `json:"user_id,omitempty" example:"user-123"`
-	Data      map[string]interface{} `json:"data"`
-	IP        string                 `json:"ip" example:"192.168.1.1"`
-	UserAgent string                 `json:"user_agent" example:"Mozilla/5.0..."`
-	CreatedAt time.Time              `json:"created_at" example:"2024-01-01T00:00:00Z"`
-}
-
 // Analytics represents analytics data
 type Analytics struct {
 	FormID           string    `json:"form_id" example:"form-123"`
@@ -181,20 +160,6 @@ type Notification struct {
 	Data      map[string]interface{} `json:"data,omitempty"`
 	Read      bool                   `json:"read" example:"false"`
 	CreatedAt time.Time              `json:"created_at" example:"2024-01-01T00:00:00Z"`
-}
-
-// FileUpload represents a file upload
-type FileUpload struct {
-	ID        string    `json:"id" example:"file-123"`
-	UserID    string    `json:"user_id" example:"user-123"`
-	FormID    string    `json:"form_id,omitempty" example:"form-123"`
-	FieldID   string    `json:"field_id,omitempty" example:"field-123"`
-	Filename  string    `json:"filename" example:"document.pdf"`
-	Size      int64     `json:"size" example:"1024000"`
-	MimeType  string    `json:"mime_type" example:"application/pdf"`
-	URL       string    `json:"url" example:"https://s3.amazonaws.com/bucket/file.pdf"`
-	Status    string    `json:"status" example:"uploaded"`
-	CreatedAt time.Time `json:"created_at" example:"2024-01-01T00:00:00Z"`
 }
 
 // Webhook represents a webhook configuration

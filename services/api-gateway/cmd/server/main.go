@@ -1,18 +1,28 @@
 package main
 
 import (
+	"context"
+	"fmt"
 	"log"
+	"net/http"
 	"os"
+	"os/signal"
+	"syscall"
+	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/joho/godotenv"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	swaggerFiles "github.com/swaggo/files"
 	ginSwagger "github.com/swaggo/gin-swagger"
 
 	_ "github.com/Mir00r/X-Form-Backend/services/api-gateway/docs" // Import for swagger
+	"github.com/Mir00r/X-Form-Backend/services/api-gateway/internal/config"
+	"github.com/Mir00r/X-Form-Backend/services/api-gateway/internal/discovery"
 	"github.com/Mir00r/X-Form-Backend/services/api-gateway/internal/handlers"
+	"github.com/Mir00r/X-Form-Backend/services/api-gateway/internal/jwt"
 	"github.com/Mir00r/X-Form-Backend/services/api-gateway/internal/middleware"
+	"github.com/Mir00r/X-Form-Backend/services/api-gateway/internal/traefik"
+	"github.com/Mir00r/X-Form-Backend/services/api-gateway/internal/tyk"
 )
 
 // @title           X-Form API Gateway
@@ -78,45 +88,57 @@ import (
 // @description API key for service-to-service communication
 
 func main() {
-	// Load environment variables
-	if err := godotenv.Load(); err != nil {
-		log.Println("No .env file found, using environment variables")
-	}
+	// Load configuration
+	cfg := config.Load()
 
-	// Get JWT secret from environment
-	jwtSecret := os.Getenv("JWT_SECRET")
-	if jwtSecret == "" {
-		jwtSecret = "your-secret-key-change-this-in-production"
-		log.Println("Warning: Using default JWT secret. Set JWT_SECRET environment variable for production.")
-	}
+	log.Printf("🚀 X-Form API Gateway v%s starting...", cfg.Version)
+	log.Printf("🌍 Environment: %s", cfg.Environment)
 
-	// Set Gin mode
-	if os.Getenv("GIN_MODE") == "release" {
+	// Initialize services
+	jwtService := jwt.NewJWTService(cfg)
+	serviceDiscovery := discovery.NewServiceDiscovery(cfg)
+	traefikService := traefik.NewTraefikService(cfg)
+	tykService := tyk.NewTykService(cfg)
+
+	// Set Gin mode based on environment
+	if cfg.Environment == "production" {
 		gin.SetMode(gin.ReleaseMode)
 	}
 
 	// Initialize router
 	r := gin.Default()
 
-	// Add enhanced middleware
+	// Add core middleware
 	r.Use(middleware.RequestID())
 	r.Use(middleware.RequestLogger())
 	r.Use(middleware.CORS())
 	r.Use(middleware.SecurityHeaders())
 	r.Use(middleware.Recovery())
 
-	// Metrics endpoint
-	r.GET("/metrics", gin.WrapH(promhttp.Handler()))
+	// Add integration middleware
+	if cfg.Traefik.Enabled {
+		r.Use(traefikService.TraefikMiddleware())
+		log.Printf("✅ Traefik integration enabled")
+	}
 
-	// Enhanced health check endpoints
-	r.GET("/health", handlers.EnhancedHealthCheck)
+	if cfg.Tyk.Enabled {
+		r.Use(tykService.TykMiddleware())
+		log.Printf("✅ Tyk API management enabled")
+	}
+
+	// Health check endpoints
+	r.GET("/health", traefikService.HealthCheck())
 	r.GET("/ready", handlers.EnhancedReady)
 	r.GET("/live", handlers.EnhancedLive)
 
-	// Swagger documentation with enhanced configuration
-	r.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
+	// Metrics endpoint
+	if cfg.Observability.Metrics.Enabled {
+		r.GET(cfg.Observability.Metrics.Path, gin.WrapH(promhttp.Handler()))
+		log.Printf("📊 Metrics enabled at %s", cfg.Observability.Metrics.Path)
+	}
 
-	// Redirect root to documentation
+	// Swagger documentation
+	r.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
 	r.GET("/", func(c *gin.Context) {
 		c.Redirect(302, "/swagger/index.html")
 	})
@@ -124,68 +146,192 @@ func main() {
 		c.Redirect(302, "/swagger/index.html")
 	})
 
-	// API v1 routes with enhanced handlers
-	v1 := r.Group("/api/v1")
+	// Service discovery endpoints
+	serviceGroup := r.Group("/api/gateway")
 	{
-		// Enhanced Authentication service routes
+		serviceGroup.GET("/services", serviceDiscovery.GetServicesEndpoint())
+		serviceGroup.GET("/services/:service/health", serviceDiscovery.GetServiceHealthEndpoint())
+		serviceGroup.GET("/services/metrics", serviceDiscovery.GetServiceMetricsEndpoint())
+
+		// JWT validation endpoints
+		serviceGroup.POST("/jwt/validate", jwtService.ValidateJWTEndpoint())
+		serviceGroup.GET("/jwt/jwks", jwtService.GetJWKSEndpoint())
+
+		// Traefik configuration endpoint
+		if cfg.Traefik.Enabled {
+			serviceGroup.GET("/traefik/config", func(c *gin.Context) {
+				c.JSON(http.StatusOK, traefikService.GetTraefikConfig())
+			})
+		}
+	}
+
+	// API v1 routes with JWT authentication
+	v1 := r.Group("/api/v1")
+	v1.Use(jwtService.JWTMiddleware())
+	{
+		// Authentication service routes (proxied)
 		auth := v1.Group("/auth")
 		{
-			auth.POST("/register", handlers.EnhancedRegister)
-			auth.POST("/login", handlers.EnhancedLogin)
-			auth.POST("/logout", middleware.AuthRequired(jwtSecret), handlers.EnhancedLogout)
-			auth.POST("/refresh", handlers.EnhancedRefreshToken)
-			auth.GET("/profile", middleware.AuthRequired(jwtSecret), handlers.EnhancedGetProfile)
-			auth.PUT("/profile", middleware.AuthRequired(jwtSecret), handlers.EnhancedUpdateProfile)
-			auth.DELETE("/profile", middleware.AuthRequired(jwtSecret), handlers.EnhancedDeleteProfile)
+			auth.Any("/*path", serviceDiscovery.ProxyRequest("auth-service"))
 		}
 
-		// Enhanced Form service routes
+		// Form service routes (proxied)
 		forms := v1.Group("/forms")
 		{
-			forms.GET("", middleware.OptionalAuth(jwtSecret), handlers.EnhancedListForms)
-			forms.POST("", middleware.AuthRequired(jwtSecret), handlers.EnhancedCreateForm)
-			forms.GET("/:id", middleware.OptionalAuth(jwtSecret), handlers.EnhancedGetForm)
-			forms.PUT("/:id", middleware.AuthRequired(jwtSecret), handlers.UpdateForm)
-			forms.DELETE("/:id", middleware.AuthRequired(jwtSecret), handlers.DeleteForm)
-			forms.POST("/:id/publish", middleware.AuthRequired(jwtSecret), handlers.PublishForm)
-			forms.POST("/:id/unpublish", middleware.AuthRequired(jwtSecret), handlers.UnpublishForm)
+			forms.Any("/*path", serviceDiscovery.ProxyRequest("form-service"))
 		}
 
-		// Enhanced Response service routes
+		// Response service routes (proxied)
 		responses := v1.Group("/responses")
 		{
-			responses.GET("", middleware.AuthRequired(jwtSecret), handlers.EnhancedListResponses)
-			responses.POST("/:formId/submit", handlers.EnhancedSubmitResponse)
-			responses.GET("/:id", middleware.AuthRequired(jwtSecret), handlers.EnhancedGetResponse)
-			responses.PUT("/:id", middleware.AuthRequired(jwtSecret), handlers.UpdateResponse)
-			responses.DELETE("/:id", middleware.AuthRequired(jwtSecret), handlers.DeleteResponse)
+			responses.Any("/*path", serviceDiscovery.ProxyRequest("response-service"))
 		}
 
-		// Enhanced Analytics service routes (protected)
-		analytics := v1.Group("/analytics", middleware.AuthRequired(jwtSecret))
+		// Analytics service routes (proxied)
+		analytics := v1.Group("/analytics")
 		{
-			analytics.GET("/forms/:formId", handlers.EnhancedGetFormAnalytics)
-			analytics.GET("/responses/:responseId", handlers.GetResponseAnalytics)
-			analytics.GET("/dashboard", handlers.EnhancedGetDashboard)
-			analytics.POST("/export", handlers.EnhancedExportData)
-			analytics.GET("/export/:job_id/status", handlers.EnhancedGetExportStatus)
+			analytics.Any("/*path", serviceDiscovery.ProxyRequest("analytics-service"))
+		}
+
+		// Collaboration service routes (proxied)
+		collaboration := v1.Group("/collaboration")
+		{
+			collaboration.Any("/*path", serviceDiscovery.ProxyRequest("collaboration-service"))
+		}
+
+		// Realtime service routes (proxied via WebSocket)
+		realtime := v1.Group("/realtime")
+		{
+			realtime.Any("/*path", serviceDiscovery.ProxyRequest("realtime-service"))
 		}
 	}
 
-	// Get port from environment or use default
-	port := os.Getenv("PORT")
-	if port == "" {
-		port = "8080"
+	// Initialize Tyk API definitions if enabled
+	if cfg.Tyk.Enabled {
+		go initializeTykAPIs(tykService, cfg)
 	}
 
-	log.Printf("🚀 X-Form API Gateway v2.0.0 starting...")
-	log.Printf("🌐 Server starting on port %s", port)
-	log.Printf("📚 Enhanced Swagger documentation: http://localhost:%s/swagger/index.html", port)
-	log.Printf("💚 Health check: http://localhost:%s/health", port)
-	log.Printf("📊 Metrics: http://localhost:%s/metrics", port)
-	log.Printf("⚡ Features: Enhanced auth, comprehensive analytics, advanced forms")
-
-	if err := r.Run(":" + port); err != nil {
-		log.Fatalf("❌ Failed to start server: %v", err)
+	// Create HTTP server with configured timeouts
+	server := &http.Server{
+		Addr:         fmt.Sprintf("%s:%s", cfg.Server.Host, cfg.Server.Port),
+		Handler:      r,
+		ReadTimeout:  cfg.Server.ReadTimeout,
+		WriteTimeout: cfg.Server.WriteTimeout,
+		IdleTimeout:  cfg.Server.IdleTimeout,
 	}
+
+	// Start server in a goroutine
+	go func() {
+		log.Printf("🌐 Server starting on %s:%s", cfg.Server.Host, cfg.Server.Port)
+		log.Printf("📚 Swagger documentation: http://localhost:%s/swagger/index.html", cfg.Server.Port)
+		log.Printf("💚 Health check: http://localhost:%s/health", cfg.Server.Port)
+
+		if cfg.Observability.Metrics.Enabled {
+			log.Printf("📊 Metrics: http://localhost:%s%s", cfg.Server.Port, cfg.Observability.Metrics.Path)
+		}
+
+		log.Printf("🔐 JWT validation: %s", getJWTMethod(cfg))
+		log.Printf("⚡ Features: Traefik(%v), Tyk(%v), JWKS(%v), mTLS(%v)",
+			cfg.Traefik.Enabled, cfg.Tyk.Enabled,
+			cfg.Security.JWKS.Endpoint != "", cfg.Security.MTLS.Enabled)
+
+		var err error
+		if cfg.Server.TLS.Enabled {
+			log.Printf("🔒 Starting HTTPS server with TLS")
+			err = server.ListenAndServeTLS(cfg.Server.TLS.CertFile, cfg.Server.TLS.KeyFile)
+		} else {
+			err = server.ListenAndServe()
+		}
+
+		if err != nil && err != http.ErrServerClosed {
+			log.Fatalf("❌ Failed to start server: %v", err)
+		}
+	}()
+
+	// Wait for interrupt signal to gracefully shutdown the server
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+	<-quit
+
+	log.Println("🛑 Shutting down server...")
+
+	// Create a deadline for graceful shutdown
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	// Stop service discovery
+	serviceDiscovery.Stop()
+
+	// Attempt graceful shutdown
+	if err := server.Shutdown(ctx); err != nil {
+		log.Printf("❌ Server forced to shutdown: %v", err)
+	} else {
+		log.Println("✅ Server exited gracefully")
+	}
+}
+
+// initializeTykAPIs initializes API definitions in Tyk
+func initializeTykAPIs(tykService *tyk.TykService, cfg *config.Config) {
+	ctx := context.Background()
+
+	// Define service configurations
+	services := map[string]string{
+		"auth-service":          "/api/v1/auth",
+		"form-service":          "/api/v1/forms",
+		"response-service":      "/api/v1/responses",
+		"analytics-service":     "/api/v1/analytics",
+		"collaboration-service": "/api/v1/collaboration",
+		"realtime-service":      "/api/v1/realtime",
+	}
+
+	// Create API definitions for each service
+	for serviceName, listenPath := range services {
+		serviceConfig, exists := getServiceConfig(cfg, serviceName)
+		if !exists {
+			continue
+		}
+
+		apiDef := tykService.GetAPIDefinitionForService(serviceName, serviceConfig.URL, listenPath)
+
+		if err := tykService.CreateAPIDefinition(ctx, apiDef); err != nil {
+			log.Printf("❌ Failed to create Tyk API definition for %s: %v", serviceName, err)
+		} else {
+			log.Printf("✅ Created Tyk API definition for %s", serviceName)
+		}
+	}
+
+	// Reload API definitions
+	if err := tykService.ReloadAPIDefinitions(ctx); err != nil {
+		log.Printf("❌ Failed to reload Tyk API definitions: %v", err)
+	} else {
+		log.Printf("✅ Reloaded Tyk API definitions")
+	}
+}
+
+// getServiceConfig returns service configuration by name
+func getServiceConfig(cfg *config.Config, serviceName string) (config.ServiceConfig, bool) {
+	switch serviceName {
+	case "auth-service":
+		return cfg.Services.AuthService, true
+	case "form-service":
+		return cfg.Services.FormService, true
+	case "response-service":
+		return cfg.Services.ResponseService, true
+	case "analytics-service":
+		return cfg.Services.AnalyticsService, true
+	case "collaboration-service":
+		return cfg.Services.CollaborationService, true
+	case "realtime-service":
+		return cfg.Services.RealtimeService, true
+	default:
+		return config.ServiceConfig{}, false
+	}
+}
+
+// getJWTMethod returns a description of the JWT validation method
+func getJWTMethod(cfg *config.Config) string {
+	if cfg.Security.JWKS.Endpoint != "" {
+		return fmt.Sprintf("JWKS (%s)", cfg.Security.JWKS.Endpoint)
+	}
+	return "Shared Secret"
 }
