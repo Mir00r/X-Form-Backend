@@ -11,9 +11,9 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/prometheus/client_golang/prometheus/promhttp"
 	swaggerFiles "github.com/swaggo/files"
 	ginSwagger "github.com/swaggo/gin-swagger"
+	"go.uber.org/zap"
 
 	_ "github.com/Mir00r/X-Form-Backend/services/api-gateway/docs" // Import for swagger
 	"github.com/Mir00r/X-Form-Backend/services/api-gateway/internal/config"
@@ -23,6 +23,7 @@ import (
 	"github.com/Mir00r/X-Form-Backend/services/api-gateway/internal/middleware"
 	"github.com/Mir00r/X-Form-Backend/services/api-gateway/internal/traefik"
 	"github.com/Mir00r/X-Form-Backend/services/api-gateway/internal/tyk"
+	"github.com/Mir00r/X-Form-Backend/shared/observability"
 )
 
 // @title           X-Form API Gateway
@@ -88,11 +89,28 @@ import (
 // @description API key for service-to-service communication
 
 func main() {
+	// Initialize structured logger
+	logger, err := zap.NewProduction()
+	if err != nil {
+		log.Fatal("Failed to initialize logger:", err)
+	}
+	defer logger.Sync()
+
 	// Load configuration
 	cfg := config.Load()
 
-	log.Printf("🚀 X-Form API Gateway v%s starting...", cfg.Version)
-	log.Printf("🌍 Environment: %s", cfg.Environment)
+	// Initialize observability
+	obsConfig := observability.DefaultConfig("api-gateway")
+	obsProvider, err := observability.New(obsConfig, logger)
+	if err != nil {
+		logger.Fatal("Failed to initialize observability", zap.Error(err))
+	}
+	defer obsProvider.Shutdown(context.Background())
+
+	logger.Info("X-Form API Gateway starting",
+		zap.String("version", cfg.Version),
+		zap.String("environment", cfg.Environment),
+	)
 
 	// Initialize services
 	jwtService := jwt.NewJWTService(cfg)
@@ -107,6 +125,9 @@ func main() {
 
 	// Initialize router
 	r := gin.Default()
+
+	// Add observability middleware first
+	r.Use(obsProvider.GinMiddleware())
 
 	// Add core middleware
 	r.Use(middleware.RequestID())
@@ -131,11 +152,9 @@ func main() {
 	r.GET("/ready", handlers.EnhancedReady)
 	r.GET("/live", handlers.EnhancedLive)
 
-	// Metrics endpoint
-	if cfg.Observability.Metrics.Enabled {
-		r.GET(cfg.Observability.Metrics.Path, gin.WrapH(promhttp.Handler()))
-		log.Printf("📊 Metrics enabled at %s", cfg.Observability.Metrics.Path)
-	}
+	// Metrics endpoint - using observability provider
+	r.GET("/metrics", gin.WrapH(obsProvider.Metrics().Handler()))
+	logger.Info("Metrics endpoint enabled", zap.String("path", "/metrics"))
 
 	// Swagger documentation
 	r.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
