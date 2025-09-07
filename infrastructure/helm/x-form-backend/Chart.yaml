@@ -1,0 +1,43 @@
+apiVersion: v2
+name: x-form-backend
+description: A Helm chart for X-Form-Backend microservices
+type: application
+version: 0.1.0
+appVersion: "1.0.0"
+
+keywords:
+  - microservices
+  - forms
+  - api
+  - nodejs
+  - golang
+  - python
+
+home: https://github.com/Mir00r/X-Form-Backend
+sources:
+  - https://github.com/Mir00r/X-Form-Backend
+
+maintainers:
+  - name: X-Form Team
+    email: team@xform.example.com
+
+dependencies:
+  - name: postgresql
+    version: "12.x.x"
+    repository: https://charts.bitnami.com/bitnami
+    condition: postgresql.enabled
+  
+  - name: redis
+    version: "18.x.x"
+    repository: https://charts.bitnami.com/bitnami
+    condition: redis.enabled
+    
+  - name: prometheus
+    version: "25.x.x"
+    repository: https://prometheus-community.github.io/helm-charts
+    condition: prometheus.enabled
+    
+  - name: grafana
+    version: "7.x.x"
+    repository: https://grafana.github.io/helm-charts
+    condition: grafana.enabled

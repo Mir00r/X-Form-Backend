@@ -1,0 +1,40 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "x-form-backend.fullname" . }}-config
+  labels:
+    {{- include "x-form-backend.labels" . | nindent 4 }}
+data:
+  # Application configuration
+  app.yaml: |
+    name: {{ .Values.config.app.name | quote }}
+    version: {{ .Values.config.app.version | quote }}
+    environment: {{ .Values.config.app.environment | quote }}
+    
+  # Database configuration  
+  database.yaml: |
+    host: {{ .Values.externalDatabase.host | quote }}
+    port: {{ .Values.externalDatabase.port | quote }}
+    database: {{ .Values.externalDatabase.database | quote }}
+    username: {{ .Values.externalDatabase.username | quote }}
+    
+  # Redis configuration
+  redis.yaml: |
+    host: {{ .Values.externalRedis.host | quote }}
+    port: {{ .Values.externalRedis.port | quote }}
+    
+  # Observability configuration
+  observability.yaml: |
+    enabled: {{ .Values.config.observability.enabled | quote }}
+    otelCollectorEndpoint: {{ .Values.config.observability.otelCollectorEndpoint | quote }}
+    prometheusEnabled: {{ .Values.config.observability.prometheusEnabled | quote }}
+    
+  # Security configuration
+  security.yaml: |
+    corsOrigins: {{ .Values.config.security.corsOrigins | toJson | quote }}
+    
+  # Storage configuration
+  storage.yaml: |
+    type: {{ .Values.config.storage.type | quote }}
+    s3Bucket: {{ .Values.config.storage.s3Bucket | quote }}
+    s3Region: {{ .Values.config.storage.s3Region | quote }}

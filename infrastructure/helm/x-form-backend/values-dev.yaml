@@ -1,0 +1,146 @@
+# Development environment values
+replicaCount: 1
+
+image:
+  registry: ghcr.io
+  repository: mir00r/x-form-backend
+  tag: "latest"
+
+# Service configurations for dev
+services:
+  apiGateway:
+    replicaCount: 1
+    resources:
+      limits:
+        cpu: 200m
+        memory: 256Mi
+      requests:
+        cpu: 100m
+        memory: 128Mi
+  
+  authService:
+    replicaCount: 1
+    resources:
+      limits:
+        cpu: 200m
+        memory: 256Mi
+      requests:
+        cpu: 100m
+        memory: 128Mi
+  
+  formService:
+    replicaCount: 1
+    resources:
+      limits:
+        cpu: 200m
+        memory: 256Mi
+      requests:
+        cpu: 100m
+        memory: 128Mi
+  
+  responseService:
+    replicaCount: 1
+    resources:
+      limits:
+        cpu: 200m
+        memory: 256Mi
+      requests:
+        cpu: 100m
+        memory: 128Mi
+  
+  collaborationService:
+    replicaCount: 1
+    resources:
+      limits:
+        cpu: 200m
+        memory: 256Mi
+      requests:
+        cpu: 100m
+        memory: 128Mi
+  
+  realtimeService:
+    replicaCount: 1
+    resources:
+      limits:
+        cpu: 200m
+        memory: 256Mi
+      requests:
+        cpu: 100m
+        memory: 128Mi
+  
+  analyticsService:
+    replicaCount: 1
+    resources:
+      limits:
+        cpu: 200m
+        memory: 256Mi
+      requests:
+        cpu: 100m
+        memory: 128Mi
+
+# Ingress
+ingress:
+  enabled: true
+  className: "nginx"
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /
+    nginx.ingress.kubernetes.io/ssl-redirect: "false"
+  hosts:
+    - host: api-dev.xform.local
+      paths:
+        - path: /api/v1/auth
+          pathType: Prefix
+          service: auth-service
+        - path: /api/v1/forms
+          pathType: Prefix
+          service: form-service
+        - path: /api/v1/responses
+          pathType: Prefix
+          service: response-service
+        - path: /api/v1/collaboration
+          pathType: Prefix
+          service: collaboration-service
+        - path: /api/v1/realtime
+          pathType: Prefix
+          service: realtime-service
+        - path: /api/v1/analytics
+          pathType: Prefix
+          service: analytics-service
+        - path: /
+          pathType: Prefix
+          service: api-gateway
+  tls: []
+
+# Autoscaling (disabled for dev)
+autoscaling:
+  enabled: false
+
+# Resources (smaller for dev)
+resources:
+  limits:
+    cpu: 200m
+    memory: 256Mi
+  requests:
+    cpu: 100m
+    memory: 128Mi
+
+# Configuration
+config:
+  app:
+    environment: "development"
+  observability:
+    enabled: true
+    otelCollectorEndpoint: "http://otel-collector.observability:4318"
+  security:
+    corsOrigins: ["http://localhost:3000", "http://api-dev.xform.local"]
+
+# Environment variables
+env:
+  - name: NODE_ENV
+    value: development
+  - name: LOG_LEVEL
+    value: debug
+  - name: GIN_MODE
+    value: debug
+  - name: ENVIRONMENT
+    value: development

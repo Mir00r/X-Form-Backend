@@ -1,0 +1,421 @@
+# Default values for x-form-backend.
+# This is a YAML-formatted file.
+
+# Global settings
+global:
+  imageRegistry: ""
+  imagePullSecrets: []
+  storageClass: ""
+  
+replicaCount: 3
+
+image:
+  registry: ghcr.io
+  repository: mir00r/x-form-backend
+  pullPolicy: IfNotPresent
+  tag: ""
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+
+# Service Account
+serviceAccount:
+  create: true
+  annotations: {}
+  name: ""
+
+# Pod Security Context
+podSecurityContext:
+  fsGroup: 2000
+  runAsNonRoot: true
+  runAsUser: 1000
+
+# Container Security Context
+securityContext:
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop:
+    - ALL
+  readOnlyRootFilesystem: true
+  runAsNonRoot: true
+  runAsUser: 1000
+
+# Services Configuration
+services:
+  apiGateway:
+    enabled: true
+    name: api-gateway
+    replicaCount: 2
+    image:
+      repository: api-gateway
+      tag: latest
+    port: 8080
+    env:
+      LOG_LEVEL: info
+      NODE_ENV: production
+    resources:
+      limits:
+        cpu: 500m
+        memory: 512Mi
+      requests:
+        cpu: 250m
+        memory: 256Mi
+    
+  authService:
+    enabled: true
+    name: auth-service
+    replicaCount: 2
+    image:
+      repository: auth-service
+      tag: latest
+    port: 3001
+    env:
+      NODE_ENV: production
+      LOG_LEVEL: info
+    resources:
+      limits:
+        cpu: 500m
+        memory: 512Mi
+      requests:
+        cpu: 250m
+        memory: 256Mi
+        
+  formService:
+    enabled: true
+    name: form-service
+    replicaCount: 2
+    image:
+      repository: form-service
+      tag: latest
+    port: 8081
+    env:
+      GIN_MODE: release
+      LOG_LEVEL: info
+    resources:
+      limits:
+        cpu: 500m
+        memory: 512Mi
+      requests:
+        cpu: 250m
+        memory: 256Mi
+        
+  responseService:
+    enabled: true
+    name: response-service
+    replicaCount: 2
+    image:
+      repository: response-service
+      tag: latest
+    port: 3003
+    env:
+      NODE_ENV: production
+      LOG_LEVEL: info
+    resources:
+      limits:
+        cpu: 500m
+        memory: 512Mi
+      requests:
+        cpu: 250m
+        memory: 256Mi
+        
+  collaborationService:
+    enabled: true
+    name: collaboration-service
+    replicaCount: 2
+    image:
+      repository: collaboration-service
+      tag: latest
+    port: 8082
+    env:
+      GIN_MODE: release
+      LOG_LEVEL: info
+    resources:
+      limits:
+        cpu: 500m
+        memory: 512Mi
+      requests:
+        cpu: 250m
+        memory: 256Mi
+        
+  realtimeService:
+    enabled: true
+    name: realtime-service
+    replicaCount: 2
+    image:
+      repository: realtime-service
+      tag: latest
+    port: 3004
+    env:
+      NODE_ENV: production
+      LOG_LEVEL: info
+    resources:
+      limits:
+        cpu: 500m
+        memory: 512Mi
+      requests:
+        cpu: 250m
+        memory: 256Mi
+        
+  analyticsService:
+    enabled: true
+    name: analytics-service
+    replicaCount: 2
+    image:
+      repository: analytics-service
+      tag: latest
+    port: 8000
+    env:
+      ENVIRONMENT: production
+      LOG_LEVEL: info
+    resources:
+      limits:
+        cpu: 500m
+        memory: 512Mi
+      requests:
+        cpu: 250m
+        memory: 256Mi
+
+# Kubernetes Services
+service:
+  type: ClusterIP
+  annotations: {}
+
+# Ingress
+ingress:
+  enabled: true
+  className: "nginx"
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /
+    nginx.ingress.kubernetes.io/use-regex: "true"
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+  hosts:
+    - host: api.xform.local
+      paths:
+        - path: /api/v1/auth
+          pathType: Prefix
+          service: auth-service
+        - path: /api/v1/forms
+          pathType: Prefix
+          service: form-service
+        - path: /api/v1/responses
+          pathType: Prefix
+          service: response-service
+        - path: /api/v1/collaboration
+          pathType: Prefix
+          service: collaboration-service
+        - path: /api/v1/realtime
+          pathType: Prefix
+          service: realtime-service
+        - path: /api/v1/analytics
+          pathType: Prefix
+          service: analytics-service
+        - path: /
+          pathType: Prefix
+          service: api-gateway
+  tls:
+    - secretName: xform-tls
+      hosts:
+        - api.xform.local
+
+# Resources
+resources:
+  limits:
+    cpu: 500m
+    memory: 512Mi
+  requests:
+    cpu: 250m
+    memory: 256Mi
+
+# Autoscaling
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 80
+  targetMemoryUtilizationPercentage: 80
+
+# Node Selection
+nodeSelector: {}
+tolerations: []
+affinity: {}
+
+# Pod Disruption Budget
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 1
+
+# Network Policies
+networkPolicy:
+  enabled: true
+  ingress:
+    - from:
+      - namespaceSelector:
+          matchLabels:
+            name: nginx-ingress
+      - namespaceSelector:
+          matchLabels:
+            name: monitoring
+  egress:
+    - to:
+      - namespaceSelector:
+          matchLabels:
+            name: kube-system
+    - to: []
+      ports:
+      - protocol: TCP
+        port: 5432  # PostgreSQL
+      - protocol: TCP
+        port: 6379  # Redis
+      - protocol: TCP
+        port: 443   # HTTPS
+      - protocol: TCP
+        port: 80    # HTTP
+
+# Database Configuration
+postgresql:
+  enabled: false  # We use external RDS
+  
+redis:
+  enabled: false  # We use external ElastiCache
+
+# External Database Configuration
+externalDatabase:
+  host: ""
+  port: 5432
+  database: "xformdb"
+  username: "xformuser"
+  password: ""
+  existingSecret: "postgresql-secret"
+  existingSecretPasswordKey: "password"
+
+# External Redis Configuration  
+externalRedis:
+  host: ""
+  port: 6379
+  password: ""
+  existingSecret: "redis-secret"
+  existingSecretPasswordKey: "password"
+
+# ConfigMaps and Secrets
+config:
+  # Application configuration
+  app:
+    name: "X-Form-Backend"
+    version: "1.0.0"
+    environment: "production"
+    
+  # Observability configuration
+  observability:
+    enabled: true
+    otelCollectorEndpoint: "http://otel-collector:4318"
+    prometheusEnabled: true
+    sentryDsn: ""
+    
+  # Security configuration
+  security:
+    jwtSecret: ""
+    encryptionKey: ""
+    corsOrigins: ["https://app.xform.local"]
+    
+  # File storage configuration
+  storage:
+    type: "s3"
+    s3Bucket: ""
+    s3Region: "us-west-2"
+
+# Secrets (will be created from external sources)
+secrets:
+  postgresql:
+    password: ""
+  redis:
+    password: ""
+  jwt:
+    secret: ""
+  encryption:
+    key: ""
+  sentry:
+    dsn: ""
+
+# Service Monitor for Prometheus
+serviceMonitor:
+  enabled: true
+  namespace: monitoring
+  labels:
+    app: x-form-backend
+  interval: 30s
+  path: /metrics
+
+# Grafana Dashboard
+grafanaDashboard:
+  enabled: true
+  namespace: monitoring
+  labels:
+    grafana_dashboard: "1"
+
+# Observability Stack
+observability:
+  prometheus:
+    enabled: true
+    namespace: monitoring
+    
+  grafana:
+    enabled: true
+    namespace: monitoring
+    adminPassword: "admin123"
+    
+  jaeger:
+    enabled: true
+    namespace: observability
+    
+  otelCollector:
+    enabled: true
+    namespace: observability
+
+# Health Checks
+healthChecks:
+  livenessProbe:
+    enabled: true
+    initialDelaySeconds: 30
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 3
+    successThreshold: 1
+    
+  readinessProbe:
+    enabled: true
+    initialDelaySeconds: 5
+    periodSeconds: 5
+    timeoutSeconds: 3
+    failureThreshold: 3
+    successThreshold: 1
+
+# Pod Annotations
+podAnnotations:
+  prometheus.io/scrape: "true"
+  prometheus.io/port: "9090"
+  prometheus.io/path: "/metrics"
+
+# Labels
+labels: {}
+
+# Deployment Strategy
+deploymentStrategy:
+  type: RollingUpdate
+  rollingUpdate:
+    maxUnavailable: 25%
+    maxSurge: 25%
+
+# Environment Variables (common to all services)
+env:
+  - name: NODE_ENV
+    value: production
+  - name: LOG_LEVEL
+    value: info
+  - name: OTEL_SERVICE_VERSION
+    value: "1.0.0"
+  - name: OTEL_ENVIRONMENT
+    value: production
+  - name: PROMETHEUS_ENABLED
+    value: "true"

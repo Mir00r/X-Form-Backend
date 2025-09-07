@@ -1,0 +1,199 @@
+# Production environment values
+replicaCount: 3
+
+image:
+  registry: ghcr.io
+  repository: mir00r/x-form-backend
+  tag: "stable"
+
+# Service configurations for production
+services:
+  apiGateway:
+    replicaCount: 3
+    resources:
+      limits:
+        cpu: 1000m
+        memory: 1Gi
+      requests:
+        cpu: 500m
+        memory: 512Mi
+  
+  authService:
+    replicaCount: 3
+    resources:
+      limits:
+        cpu: 800m
+        memory: 1Gi
+      requests:
+        cpu: 400m
+        memory: 512Mi
+  
+  formService:
+    replicaCount: 3
+    resources:
+      limits:
+        cpu: 800m
+        memory: 1Gi
+      requests:
+        cpu: 400m
+        memory: 512Mi
+  
+  responseService:
+    replicaCount: 3
+    resources:
+      limits:
+        cpu: 800m
+        memory: 1Gi
+      requests:
+        cpu: 400m
+        memory: 512Mi
+  
+  collaborationService:
+    replicaCount: 3
+    resources:
+      limits:
+        cpu: 800m
+        memory: 1Gi
+      requests:
+        cpu: 400m
+        memory: 512Mi
+  
+  realtimeService:
+    replicaCount: 3
+    resources:
+      limits:
+        cpu: 800m
+        memory: 1Gi
+      requests:
+        cpu: 400m
+        memory: 512Mi
+  
+  analyticsService:
+    replicaCount: 3
+    resources:
+      limits:
+        cpu: 800m
+        memory: 1Gi
+      requests:
+        cpu: 400m
+        memory: 512Mi
+
+# Ingress for production
+ingress:
+  enabled: true
+  className: "nginx"
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    nginx.ingress.kubernetes.io/rate-limit: "100"
+    nginx.ingress.kubernetes.io/rate-limit-window: "1m"
+  hosts:
+    - host: api.xform.example.com
+      paths:
+        - path: /api/v1/auth
+          pathType: Prefix
+          service: auth-service
+        - path: /api/v1/forms
+          pathType: Prefix
+          service: form-service
+        - path: /api/v1/responses
+          pathType: Prefix
+          service: response-service
+        - path: /api/v1/collaboration
+          pathType: Prefix
+          service: collaboration-service
+        - path: /api/v1/realtime
+          pathType: Prefix
+          service: realtime-service
+        - path: /api/v1/analytics
+          pathType: Prefix
+          service: analytics-service
+        - path: /
+          pathType: Prefix
+          service: api-gateway
+  tls:
+    - secretName: xform-tls
+      hosts:
+        - api.xform.example.com
+
+# Autoscaling enabled for production
+autoscaling:
+  enabled: true
+  minReplicas: 3
+  maxReplicas: 20
+  targetCPUUtilizationPercentage: 70
+  targetMemoryUtilizationPercentage: 80
+
+# Pod Disruption Budget for high availability
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 2
+
+# Production resources
+resources:
+  limits:
+    cpu: 800m
+    memory: 1Gi
+  requests:
+    cpu: 400m
+    memory: 512Mi
+
+# Configuration for production
+config:
+  app:
+    environment: "production"
+  observability:
+    enabled: true
+    otelCollectorEndpoint: "http://otel-collector.observability:4318"
+  security:
+    corsOrigins: ["https://app.xform.example.com", "https://xform.example.com"]
+
+# Production environment variables
+env:
+  - name: NODE_ENV
+    value: production
+  - name: LOG_LEVEL
+    value: info
+  - name: GIN_MODE
+    value: release
+  - name: ENVIRONMENT
+    value: production
+
+# Security context for production
+securityContext:
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop:
+    - ALL
+  readOnlyRootFilesystem: true
+  runAsNonRoot: true
+  runAsUser: 10001
+  runAsGroup: 10001
+
+podSecurityContext:
+  fsGroup: 10001
+  runAsNonRoot: true
+  runAsUser: 10001
+  runAsGroup: 10001
+  seccompProfile:
+    type: RuntimeDefault
+
+# Network policies for production
+networkPolicy:
+  enabled: true
+
+# Affinity for better distribution
+affinity:
+  podAntiAffinity:
+    preferredDuringSchedulingIgnoredDuringExecution:
+    - weight: 100
+      podAffinityTerm:
+        labelSelector:
+          matchExpressions:
+          - key: app.kubernetes.io/name
+            operator: In
+            values:
+            - x-form-backend
+        topologyKey: kubernetes.io/hostname

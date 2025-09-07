@@ -5,14 +5,163 @@ on:
     branches: [ main, develop ]
   pull_request:
     branches: [ main ]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to deploy'
+        required: true
+        default: 'dev'
+        type: choice
+        options:
+        - dev
+        - staging
+        - production
+      deploy_infrastructure:
+        description: 'Deploy infrastructure'
+        required: false
+        default: false
+        type: boolean
 
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}
+  AWS_REGION: us-west-2
+  TERRAFORM_VERSION: 1.5.7
+  HELM_VERSION: v3.12.3
+  KUBECTL_VERSION: v1.28.0
 
 jobs:
+  # Detect changes in services and infrastructure
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      services: ${{ steps.changes.outputs.services }}
+      infrastructure: ${{ steps.changes.outputs.infrastructure }}
+      auth-service: ${{ steps.changes.outputs.auth-service }}
+      form-service: ${{ steps.changes.outputs.form-service }}
+      response-service: ${{ steps.changes.outputs.response-service }}
+      collaboration-service: ${{ steps.changes.outputs.collaboration-service }}
+      realtime-service: ${{ steps.changes.outputs.realtime-service }}
+      analytics-service: ${{ steps.changes.outputs.analytics-service }}
+      api-gateway: ${{ steps.changes.outputs.api-gateway }}
+    steps:
+    - uses: actions/checkout@v4
+    - uses: dorny/paths-filter@v2
+      id: changes
+      with:
+        filters: |
+          infrastructure:
+            - 'infrastructure/**'
+          services:
+            - 'services/**'
+          auth-service:
+            - 'services/auth-service/**'
+          form-service:
+            - 'services/form-service/**'
+          response-service:
+            - 'services/response-service/**'
+          collaboration-service:
+            - 'services/collaboration-service/**'
+          realtime-service:
+            - 'services/realtime-service/**'
+          analytics-service:
+            - 'services/analytics-service/**'
+          api-gateway:
+            - 'services/api-gateway/**'
+
+  # Validate Terraform configuration
+  terraform-validate:
+    runs-on: ubuntu-latest
+    needs: changes
+    if: needs.changes.outputs.infrastructure == 'true' || github.event.inputs.deploy_infrastructure == 'true'
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Terraform
+      uses: hashicorp/setup-terraform@v2
+      with:
+        terraform_version: ${{ env.TERRAFORM_VERSION }}
+
+    - name: Terraform Init
+      run: |
+        cd infrastructure/terraform
+        terraform init -backend=false
+
+    - name: Terraform Validate
+      run: |
+        cd infrastructure/terraform
+        terraform validate
+
+    - name: Terraform Format Check
+      run: |
+        cd infrastructure/terraform
+        terraform fmt -check
+
+    - name: TFLint
+      uses: terraform-linters/setup-tflint@v3
+      with:
+        tflint_version: latest
+
+    - name: Run TFLint
+      run: |
+        cd infrastructure/terraform
+        tflint --init
+        tflint
+
+  # Validate Helm charts
+  helm-validate:
+    runs-on: ubuntu-latest
+    needs: changes
+    if: needs.changes.outputs.infrastructure == 'true' || needs.changes.outputs.services == 'true'
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Helm
+      uses: azure/setup-helm@v3
+      with:
+        version: ${{ env.HELM_VERSION }}
+
+    - name: Lint Helm Chart
+      run: |
+        cd infrastructure/helm/x-form-backend
+        helm dependency update
+        helm lint .
+
+    - name: Template Helm Chart
+      run: |
+        cd infrastructure/helm/x-form-backend
+        helm template test . --values values.yaml --dry-run
+
+  # Security scanning for infrastructure
+  infrastructure-security:
+    runs-on: ubuntu-latest
+    needs: changes
+    if: needs.changes.outputs.infrastructure == 'true'
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Run Checkov for Terraform
+      uses: bridgecrewio/checkov-action@master
+      with:
+        directory: infrastructure/terraform
+        framework: terraform
+        output_format: sarif
+        output_file_path: checkov-terraform.sarif
+
+    - name: Upload Checkov results to GitHub Security
+      uses: github/codeql-action/upload-sarif@v2
+      if: always()
+      with:
+        sarif_file: checkov-terraform.sarif
+
+  # Test services
   test:
     runs-on: ubuntu-latest
+    needs: changes
+    if: needs.changes.outputs.services == 'true'
     
     services:
       postgres:
@@ -41,14 +190,31 @@ jobs:
 
     strategy:
       matrix:
-        service: [auth-service, response-service, form-service, analytics-service]
+        service: 
+          - auth-service
+          - response-service  
+          - form-service
+          - analytics-service
+          - api-gateway
+          - collaboration-service
+          - realtime-service
+      fail-fast: false
 
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
 
+    - name: Check if service changed
+      id: service-changed
+      run: |
+        if [[ "${{ needs.changes.outputs[matrix.service] }}" == "true" ]]; then
+          echo "changed=true" >> $GITHUB_OUTPUT
+        else
+          echo "changed=false" >> $GITHUB_OUTPUT
+        fi
+
     - name: Setup Node.js (for Node.js services)
-      if: matrix.service == 'auth-service' || matrix.service == 'response-service'
+      if: steps.service-changed.outputs.changed == 'true' && (matrix.service == 'auth-service' || matrix.service == 'response-service' || matrix.service == 'realtime-service')
       uses: actions/setup-node@v4
       with:
         node-version: '18'
@@ -56,37 +222,37 @@ jobs:
         cache-dependency-path: services/${{ matrix.service }}/package-lock.json
 
     - name: Setup Go (for Go services)
-      if: matrix.service == 'form-service'
+      if: steps.service-changed.outputs.changed == 'true' && (matrix.service == 'form-service' || matrix.service == 'api-gateway' || matrix.service == 'collaboration-service')
       uses: actions/setup-go@v5
       with:
         go-version: '1.21'
 
     - name: Setup Python (for Python services)
-      if: matrix.service == 'analytics-service'
+      if: steps.service-changed.outputs.changed == 'true' && matrix.service == 'analytics-service'
       uses: actions/setup-python@v4
       with:
-        python-version: '3.9'
+        python-version: '3.11'
 
     - name: Install Node.js dependencies
-      if: matrix.service == 'auth-service' || matrix.service == 'response-service'
+      if: steps.service-changed.outputs.changed == 'true' && (matrix.service == 'auth-service' || matrix.service == 'response-service' || matrix.service == 'realtime-service')
       run: |
         cd services/${{ matrix.service }}
         npm ci
 
     - name: Install Go dependencies
-      if: matrix.service == 'form-service'
+      if: steps.service-changed.outputs.changed == 'true' && (matrix.service == 'form-service' || matrix.service == 'api-gateway' || matrix.service == 'collaboration-service')
       run: |
         cd services/${{ matrix.service }}
         go mod download
 
     - name: Install Python dependencies
-      if: matrix.service == 'analytics-service'
+      if: steps.service-changed.outputs.changed == 'true' && matrix.service == 'analytics-service'
       run: |
         cd services/${{ matrix.service }}
         pip install -r requirements.txt
 
     - name: Run tests - Node.js
-      if: matrix.service == 'auth-service' || matrix.service == 'response-service'
+      if: steps.service-changed.outputs.changed == 'true' && (matrix.service == 'auth-service' || matrix.service == 'response-service' || matrix.service == 'realtime-service')
       run: |
         cd services/${{ matrix.service }}
         npm test
@@ -94,65 +260,172 @@ jobs:
         DATABASE_URL: postgresql://postgres:postgres@localhost:5432/test_db
         REDIS_URL: redis://localhost:6379
         JWT_SECRET: test-secret
+        NODE_ENV: test
 
     - name: Run tests - Go
-      if: matrix.service == 'form-service'
+      if: steps.service-changed.outputs.changed == 'true' && (matrix.service == 'form-service' || matrix.service == 'api-gateway' || matrix.service == 'collaboration-service')
       run: |
         cd services/${{ matrix.service }}
-        go test ./...
+        go test ./... -v -race -coverprofile=coverage.out
       env:
         DATABASE_URL: postgresql://postgres:postgres@localhost:5432/test_db
         REDIS_URL: redis://localhost:6379
         JWT_SECRET: test-secret
+        GIN_MODE: test
 
     - name: Run tests - Python
-      if: matrix.service == 'analytics-service'
+      if: steps.service-changed.outputs.changed == 'true' && matrix.service == 'analytics-service'
       run: |
         cd services/${{ matrix.service }}
-        python -m pytest tests/ || echo "No tests found"
+        python -m pytest tests/ -v --cov=app || echo "No tests found"
       env:
-        FIREBASE_PROJECT_ID: test-project
+        DATABASE_URL: postgresql://postgres:postgres@localhost:5432/test_db
         JWT_SECRET: test-secret
+        ENVIRONMENT: test
+
+    - name: Upload Go coverage reports to Codecov
+      if: steps.service-changed.outputs.changed == 'true' && (matrix.service == 'form-service' || matrix.service == 'api-gateway' || matrix.service == 'collaboration-service')
+      uses: codecov/codecov-action@v3
+      with:
+        file: services/${{ matrix.service }}/coverage.out
+        flags: ${{ matrix.service }}
 
     - name: Run linting - Node.js
-      if: matrix.service == 'auth-service' || matrix.service == 'response-service'
+      if: steps.service-changed.outputs.changed == 'true' && (matrix.service == 'auth-service' || matrix.service == 'response-service' || matrix.service == 'realtime-service')
       run: |
         cd services/${{ matrix.service }}
         npm run lint
 
     - name: Run linting - Go
-      if: matrix.service == 'form-service'
+      if: steps.service-changed.outputs.changed == 'true' && (matrix.service == 'form-service' || matrix.service == 'api-gateway' || matrix.service == 'collaboration-service')
       uses: golangci/golangci-lint-action@v3
       with:
         version: latest
         working-directory: services/${{ matrix.service }}
 
     - name: Run linting - Python
-      if: matrix.service == 'analytics-service'
+      if: steps.service-changed.outputs.changed == 'true' && matrix.service == 'analytics-service'
       run: |
         cd services/${{ matrix.service }}
-        pip install flake8 black isort
+        pip install flake8 black isort mypy
         flake8 . --max-line-length=88 --extend-ignore=E203,W503
         black --check .
         isort --check-only .
+        mypy app/ --ignore-missing-imports
 
-  build:
-    needs: test
+  # Security scanning for application code
+  security-scan:
     runs-on: ubuntu-latest
-    if: github.event_name == 'push'
-    
+    needs: changes
+    if: needs.changes.outputs.services == 'true'
     strategy:
       matrix:
-        service: [auth-service, response-service, form-service, analytics-service]
+        service: 
+          - auth-service
+          - response-service  
+          - form-service
+          - analytics-service
+          - api-gateway
+          - collaboration-service
+          - realtime-service
 
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
 
+    - name: Check if service changed
+      id: service-changed
+      run: |
+        if [[ "${{ needs.changes.outputs[matrix.service] }}" == "true" ]]; then
+          echo "changed=true" >> $GITHUB_OUTPUT
+        else
+          echo "changed=false" >> $GITHUB_OUTPUT
+        fi
+
+    - name: Run Trivy vulnerability scanner for filesystem
+      if: steps.service-changed.outputs.changed == 'true'
+      uses: aquasecurity/trivy-action@master
+      with:
+        scan-type: 'fs'
+        scan-ref: services/${{ matrix.service }}
+        format: 'sarif'
+        output: trivy-${{ matrix.service }}.sarif
+
+    - name: Upload Trivy scan results to GitHub Security tab
+      if: steps.service-changed.outputs.changed == 'true'
+      uses: github/codeql-action/upload-sarif@v2
+      with:
+        sarif_file: trivy-${{ matrix.service }}.sarif
+        category: ${{ matrix.service }}
+
+    - name: Setup Node.js for security scan
+      if: steps.service-changed.outputs.changed == 'true' && (matrix.service == 'auth-service' || matrix.service == 'response-service' || matrix.service == 'realtime-service')
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+
+    - name: Run npm audit
+      if: steps.service-changed.outputs.changed == 'true' && (matrix.service == 'auth-service' || matrix.service == 'response-service' || matrix.service == 'realtime-service')
+      run: |
+        cd services/${{ matrix.service }}
+        npm audit --audit-level=moderate
+
+    - name: Run Snyk security scan - Node.js
+      if: steps.service-changed.outputs.changed == 'true' && (matrix.service == 'auth-service' || matrix.service == 'response-service' || matrix.service == 'realtime-service')
+      uses: snyk/actions/node@master
+      continue-on-error: true
+      env:
+        SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+      with:
+        args: --severity-threshold=high --file=services/${{ matrix.service }}/package.json
+
+    - name: Run Snyk security scan - Go
+      if: steps.service-changed.outputs.changed == 'true' && (matrix.service == 'form-service' || matrix.service == 'api-gateway' || matrix.service == 'collaboration-service')
+      uses: snyk/actions/golang@master
+      continue-on-error: true
+      env:
+        SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+      with:
+        args: --severity-threshold=high
+        command: test
+        workingDirectory: services/${{ matrix.service }}
+
+  # Build and push Docker images
+  build:
+    needs: [changes, test]
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && needs.changes.outputs.services == 'true'
+    
+    strategy:
+      matrix:
+        service: 
+          - auth-service
+          - response-service  
+          - form-service
+          - analytics-service
+          - api-gateway
+          - collaboration-service
+          - realtime-service
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Check if service changed
+      id: service-changed
+      run: |
+        if [[ "${{ needs.changes.outputs[matrix.service] }}" == "true" ]]; then
+          echo "changed=true" >> $GITHUB_OUTPUT
+        else
+          echo "changed=false" >> $GITHUB_OUTPUT
+        fi
+
     - name: Set up Docker Buildx
+      if: steps.service-changed.outputs.changed == 'true'
       uses: docker/setup-buildx-action@v3
 
     - name: Log in to Container Registry
+      if: steps.service-changed.outputs.changed == 'true'
       uses: docker/login-action@v3
       with:
         registry: ${{ env.REGISTRY }}
@@ -160,6 +433,7 @@ jobs:
         password: ${{ secrets.GITHUB_TOKEN }}
 
     - name: Extract metadata
+      if: steps.service-changed.outputs.changed == 'true'
       id: meta
       uses: docker/metadata-action@v5
       with:
@@ -168,8 +442,10 @@ jobs:
           type=ref,event=branch
           type=ref,event=pr
           type=sha,prefix={{branch}}-
+          type=raw,value=latest,enable={{is_default_branch}}
 
     - name: Build and push Docker image
+      if: steps.service-changed.outputs.changed == 'true'
       uses: docker/build-push-action@v5
       with:
         context: ./services/${{ matrix.service }}
@@ -178,48 +454,259 @@ jobs:
         labels: ${{ steps.meta.outputs.labels }}
         cache-from: type=gha
         cache-to: type=gha,mode=max
+        platforms: linux/amd64,linux/arm64
 
-  deploy:
-    needs: build
+    - name: Run Trivy vulnerability scanner on image
+      if: steps.service-changed.outputs.changed == 'true'
+      uses: aquasecurity/trivy-action@master
+      with:
+        image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/${{ matrix.service }}:${{ github.sha }}
+        format: 'sarif'
+        output: trivy-image-${{ matrix.service }}.sarif
+
+    - name: Upload Trivy image scan results
+      if: steps.service-changed.outputs.changed == 'true'
+      uses: github/codeql-action/upload-sarif@v2
+      with:
+        sarif_file: trivy-image-${{ matrix.service }}.sarif
+        category: image-${{ matrix.service }}
+
+  # Contract testing with Pact
+  contract-tests:
     runs-on: ubuntu-latest
+    needs: [changes, test]
+    if: needs.changes.outputs.services == 'true'
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+
+    - name: Install Pact CLI
+      run: npm install -g @pact-foundation/pact-node
+
+    - name: Run contract tests
+      run: |
+        echo "🤝 Running contract tests..."
+        # Add your Pact contract tests here
+        # Example:
+        # cd contract-tests
+        # npm test
+        # pact-broker publish pacts --consumer-app-version=${{ github.sha }} --broker-base-url=${{ secrets.PACT_BROKER_BASE_URL }}
+
+  # Deploy infrastructure
+  deploy-infrastructure:
+    runs-on: ubuntu-latest
+    needs: [terraform-validate, helm-validate]
+    if: (github.ref == 'refs/heads/main' && needs.changes.outputs.infrastructure == 'true') || github.event.inputs.deploy_infrastructure == 'true'
+    environment: ${{ github.event.inputs.environment || 'dev' }}
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v2
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ env.AWS_REGION }}
+
+    - name: Setup Terraform
+      uses: hashicorp/setup-terraform@v2
+      with:
+        terraform_version: ${{ env.TERRAFORM_VERSION }}
+
+    - name: Terraform Init
+      run: |
+        cd infrastructure/terraform
+        terraform init
+
+    - name: Terraform Plan
+      run: |
+        cd infrastructure/terraform
+        terraform plan -var-file="${{ github.event.inputs.environment || 'dev' }}.tfvars" -var="db_password=${{ secrets.DB_PASSWORD }}" -out=tfplan
+
+    - name: Terraform Apply
+      if: github.ref == 'refs/heads/main' || github.event.inputs.deploy_infrastructure == 'true'
+      run: |
+        cd infrastructure/terraform
+        terraform apply tfplan
+
+    - name: Update kubeconfig
+      run: |
+        aws eks update-kubeconfig --region ${{ env.AWS_REGION }} --name x-form-backend-${{ github.event.inputs.environment || 'dev' }}
+
+    - name: Setup Helm
+      uses: azure/setup-helm@v3
+      with:
+        version: ${{ env.HELM_VERSION }}
+
+    - name: Deploy observability stack
+      run: |
+        cd infrastructure/helm
+        helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+        helm repo add grafana https://grafana.github.io/helm-charts
+        helm repo add jaegertracing https://jaegertracing.github.io/helm-charts
+        helm repo update
+        
+        # Deploy Prometheus
+        helm upgrade --install prometheus prometheus-community/kube-prometheus-stack \
+          --namespace monitoring \
+          --create-namespace \
+          --set grafana.adminPassword=${{ secrets.GRAFANA_ADMIN_PASSWORD }}
+        
+        # Deploy Jaeger
+        helm upgrade --install jaeger jaegertracing/jaeger \
+          --namespace observability \
+          --create-namespace
+
+  # Deploy applications
+  deploy-applications:
+    runs-on: ubuntu-latest
+    needs: [build, deploy-infrastructure]
+    if: github.ref == 'refs/heads/main'
+    environment: ${{ github.event.inputs.environment || 'dev' }}
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v2
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ env.AWS_REGION }}
+
+    - name: Update kubeconfig
+      run: |
+        aws eks update-kubeconfig --region ${{ env.AWS_REGION }} --name x-form-backend-${{ github.event.inputs.environment || 'dev' }}
+
+    - name: Setup Helm
+      uses: azure/setup-helm@v3
+      with:
+        version: ${{ env.HELM_VERSION }}
+
+    - name: Create Kubernetes secrets
+      run: |
+        kubectl create namespace x-form-backend --dry-run=client -o yaml | kubectl apply -f -
+        
+        kubectl create secret generic postgresql-secret \
+          --from-literal=password=${{ secrets.DB_PASSWORD }} \
+          --namespace=x-form-backend \
+          --dry-run=client -o yaml | kubectl apply -f -
+        
+        kubectl create secret generic redis-secret \
+          --from-literal=password=${{ secrets.REDIS_PASSWORD }} \
+          --namespace=x-form-backend \
+          --dry-run=client -o yaml | kubectl apply -f -
+        
+        kubectl create secret generic app-secrets \
+          --from-literal=jwt-secret=${{ secrets.JWT_SECRET }} \
+          --from-literal=encryption-key=${{ secrets.ENCRYPTION_KEY }} \
+          --namespace=x-form-backend \
+          --dry-run=client -o yaml | kubectl apply -f -
+
+    - name: Deploy application
+      run: |
+        cd infrastructure/helm/x-form-backend
+        
+        helm upgrade --install x-form-backend . \
+          --namespace x-form-backend \
+          --create-namespace \
+          --set image.tag=${{ github.sha }} \
+          --set externalDatabase.host=${{ secrets.DB_HOST }} \
+          --set externalRedis.host=${{ secrets.REDIS_HOST }} \
+          --set config.observability.sentryDsn=${{ secrets.SENTRY_DSN }} \
+          --set config.storage.s3Bucket=${{ secrets.S3_BUCKET }} \
+          --wait --timeout=300s
+
+    - name: Verify deployment
+      run: |
+        kubectl get pods -n x-form-backend
+        kubectl get services -n x-form-backend
+        
+        # Wait for pods to be ready
+        kubectl wait --for=condition=ready pod -l app.kubernetes.io/name=x-form-backend -n x-form-backend --timeout=300s
+
+  # Integration and E2E tests
+  integration-tests:
+    runs-on: ubuntu-latest
+    needs: deploy-applications
     if: github.ref == 'refs/heads/main'
     
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
 
-    - name: Deploy to staging
-      run: |
-        echo "🚀 Deploying to staging environment..."
-        # Add your deployment logic here
-        # This could be deploying to AWS EKS, GKE, or other cloud providers
-        
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+
     - name: Run integration tests
       run: |
-        echo "🧪 Running integration tests..."
-        # Add integration tests against staging environment
+        echo "🧪 Running integration tests against deployed environment..."
+        # Add your integration test commands here
+        # Examples:
+        # cd e2e-tests
+        # npm ci
+        # npm run test:integration
         
-    - name: Deploy to production
-      if: success()
+    - name: Run E2E tests
       run: |
-        echo "🎉 Deploying to production environment..."
-        # Add production deployment logic here
+        echo "🎭 Running E2E tests with Playwright..."
+        # Add your E2E test commands here
+        # Examples:
+        # npx playwright test
+        
+    - name: Performance tests
+      run: |
+        echo "⚡ Running performance tests with K6..."
+        # Add your performance test commands here
+        # Examples:
+        # k6 run performance-tests/load-test.js
 
-  security:
+  # Rollback on failure
+  rollback:
     runs-on: ubuntu-latest
+    needs: [deploy-applications, integration-tests]
+    if: failure() && github.ref == 'refs/heads/main'
+    
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-
-    - name: Run Trivy vulnerability scanner
-      uses: aquasecurity/trivy-action@master
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v2
       with:
-        scan-type: 'fs'
-        scan-ref: '.'
-        format: 'sarif'
-        output: 'trivy-results.sarif'
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ env.AWS_REGION }}
 
-    - name: Upload Trivy scan results to GitHub Security tab
-      uses: github/codeql-action/upload-sarif@v2
+    - name: Update kubeconfig
+      run: |
+        aws eks update-kubeconfig --region ${{ env.AWS_REGION }} --name x-form-backend-${{ github.event.inputs.environment || 'dev' }}
+
+    - name: Setup Helm
+      uses: azure/setup-helm@v3
       with:
-        sarif_file: 'trivy-results.sarif'
+        version: ${{ env.HELM_VERSION }}
+
+    - name: Rollback deployment
+      run: |
+        echo "🔄 Rolling back deployment due to failure..."
+        helm rollback x-form-backend -n x-form-backend
+
+  # Cleanup on PR close
+  cleanup-pr:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request' && github.event.action == 'closed'
+    
+    steps:
+    - name: Cleanup PR resources
+      run: |
+        echo "🧹 Cleaning up PR resources..."
+        # Add cleanup commands for PR-specific resources
