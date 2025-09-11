@@ -2,6 +2,10 @@ basePath: /
 definitions:
   GatewayInfoResponse:
     properties:
+      features:
+        items:
+          type: string
+        type: array
       message:
         example: Enhanced X-Form API Gateway
         type: string
@@ -14,6 +18,10 @@ definitions:
     type: object
   HealthResponse:
     properties:
+      services:
+        additionalProperties:
+          type: string
+        type: object
       status:
         example: healthy
         type: string
@@ -28,7 +36,8 @@ info:
     name: API Support
     url: http://www.swagger.io/support
   description: This is the enhanced X-Form Backend API Gateway with comprehensive
-    documentation
+    features including parameter validation, whitelist validation, authentication,
+    rate limiting, service discovery, request transformation, and reverse proxy
   license:
     name: MIT
     url: https://opensource.org/licenses/MIT
@@ -40,23 +49,23 @@ paths:
     get:
       consumes:
       - application/json
-      description: Returns information about the API Gateway
+      description: Get comprehensive information about the Enhanced API Gateway including
+        all implemented features
       produces:
       - application/json
       responses:
         "200":
-          description: Gateway information
+          description: OK
           schema:
-            additionalProperties: true
-            type: object
+            $ref: '#/definitions/GatewayInfoResponse'
       summary: Gateway Information
       tags:
-      - Gateway
+      - info
   /api/v1/health:
     get:
       consumes:
       - application/json
-      description: Get the health status of the API Gateway
+      description: Get the health status of the API Gateway and all connected services
       produces:
       - application/json
       responses:
@@ -71,12 +80,13 @@ paths:
     get:
       consumes:
       - application/json
-      description: Get basic metrics from the API Gateway
+      description: Get comprehensive metrics from the API Gateway including request
+        counts, latency, and service health
       produces:
       - text/plain
       responses:
         "200":
-          description: api_gateway_requests_total 0
+          description: Prometheus metrics format
           schema:
             type: string
       summary: Metrics
@@ -86,33 +96,33 @@ paths:
     get:
       consumes:
       - application/json
-      description: Returns the health status of the API Gateway
+      description: Get the health status of the API Gateway and all connected services
       produces:
       - application/json
       responses:
         "200":
-          description: Health status
+          description: OK
           schema:
-            additionalProperties: true
-            type: object
+            $ref: '#/definitions/HealthResponse'
       summary: Health Check
       tags:
-      - Health
+      - health
   /metrics:
     get:
       consumes:
       - application/json
-      description: Returns basic metrics for the API Gateway
+      description: Get comprehensive metrics from the API Gateway including request
+        counts, latency, and service health
       produces:
       - text/plain
       responses:
         "200":
-          description: Metrics data
+          description: Prometheus metrics format
           schema:
             type: string
       summary: Metrics
       tags:
-      - Metrics
+      - monitoring
 schemes:
 - http
 - https

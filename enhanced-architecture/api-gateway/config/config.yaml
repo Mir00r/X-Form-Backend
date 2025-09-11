@@ -1,0 +1,420 @@
+# Enhanced API Gateway Configuration
+# Complete service integration configuration following the architecture diagram
+version: "1.0"
+environment: "production"
+
+# Server Configuration
+server:
+  port: 8080
+  host: "0.0.0.0"
+  read_timeout: 30
+  write_timeout: 30
+  idle_timeout: 60
+  max_header_bytes: 1048576
+
+# Security Configuration
+security:
+  jwt_secret: "${JWT_SECRET}"
+  encryption_key: "${ENCRYPTION_KEY}"
+  cors_origins:
+    - "http://localhost:3000"
+    - "https://app.xform.dev"
+  rate_limit_enabled: true
+  csrf_protection: true
+
+# Authentication Configuration
+auth:
+  jwt_secret: "${JWT_SECRET}"
+  jwt_expires_in: "24h"
+  refresh_token_expires_in: "7d"
+  issuer: "x-form-api-gateway"
+  audience: "x-form-backend"
+
+# Services Configuration - All X-Form Services
+services:
+  auth-service:
+    name: "auth-service"
+    base_url: "http://auth-service:3001"
+    health_check_path: "/health"
+    timeout: 30s
+    retry_attempts: 3
+    circuit_breaker:
+      enabled: true
+      failure_threshold: 5
+      recovery_timeout: 30s
+      test_request_volume: 3
+    load_balancer:
+      strategy: "round_robin"
+      instances:
+        - "http://auth-service:3001"
+    routes:
+      - path: "/auth/*"
+        methods: ["GET", "POST", "PUT", "DELETE", "PATCH"]
+        auth_required: false
+        rate_limit:
+          requests_per_minute: 60
+          burst: 100
+
+  form-service:
+    name: "form-service"
+    base_url: "http://form-service:8001"
+    health_check_path: "/health"
+    timeout: 30s
+    retry_attempts: 3
+    circuit_breaker:
+      enabled: true
+      failure_threshold: 5
+      recovery_timeout: 30s
+      test_request_volume: 3
+    load_balancer:
+      strategy: "round_robin"
+      instances:
+        - "http://form-service:8001"
+    routes:
+      - path: "/forms/*"
+        methods: ["GET", "POST", "PUT", "DELETE", "PATCH"]
+        auth_required: true
+        rate_limit:
+          requests_per_minute: 1000
+          burst: 2000
+
+  response-service:
+    name: "response-service"
+    base_url: "http://response-service:3002"
+    health_check_path: "/health"
+    timeout: 30s
+    retry_attempts: 3
+    circuit_breaker:
+      enabled: true
+      failure_threshold: 5
+      recovery_timeout: 30s
+      test_request_volume: 3
+    load_balancer:
+      strategy: "round_robin"
+      instances:
+        - "http://response-service:3002"
+    routes:
+      - path: "/responses/*"
+        methods: ["GET", "POST", "PUT", "DELETE", "PATCH"]
+        auth_required: true
+        rate_limit:
+          requests_per_minute: 500
+          burst: 1000
+
+  analytics-service:
+    name: "analytics-service"
+    base_url: "http://analytics-service:8080"
+    health_check_path: "/health"
+    timeout: 30s
+    retry_attempts: 3
+    circuit_breaker:
+      enabled: true
+      failure_threshold: 5
+      recovery_timeout: 30s
+      test_request_volume: 3
+    load_balancer:
+      strategy: "round_robin"
+      instances:
+        - "http://analytics-service:8080"
+    routes:
+      - path: "/analytics/*"
+        methods: ["GET", "POST"]
+        auth_required: true
+        rate_limit:
+          requests_per_minute: 100
+          burst: 200
+
+  collaboration-service:
+    name: "collaboration-service"
+    base_url: "http://collaboration-service:8083"
+    health_check_path: "/health"
+    timeout: 30s
+    retry_attempts: 3
+    circuit_breaker:
+      enabled: true
+      failure_threshold: 5
+      recovery_timeout: 30s
+      test_request_volume: 3
+    load_balancer:
+      strategy: "round_robin"
+      instances:
+        - "http://collaboration-service:8083"
+    routes:
+      - path: "/collaboration/*"
+        methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"]
+        auth_required: true
+        rate_limit:
+          requests_per_minute: 50
+          burst: 100
+
+  realtime-service:
+    name: "realtime-service"
+    base_url: "http://realtime-service:8002"
+    health_check_path: "/health"
+    timeout: 30s
+    retry_attempts: 3
+    circuit_breaker:
+      enabled: true
+      failure_threshold: 5
+      recovery_timeout: 30s
+      test_request_volume: 3
+    load_balancer:
+      strategy: "round_robin"
+      instances:
+        - "http://realtime-service:8002"
+    routes:
+      - path: "/realtime/*"
+        methods: ["GET", "POST", "PUT", "DELETE"]
+        auth_required: true
+        rate_limit:
+          requests_per_minute: 50
+          burst: 100
+      - path: "/ws/*"
+        methods: ["GET"]
+        auth_required: true
+        websocket: true
+        rate_limit:
+          requests_per_minute: 10
+          burst: 20
+
+  event-bus-service:
+    name: "event-bus-service"
+    base_url: "http://event-bus-service:8004"
+    health_check_path: "/health"
+    timeout: 30s
+    retry_attempts: 3
+    circuit_breaker:
+      enabled: true
+      failure_threshold: 5
+      recovery_timeout: 30s
+      test_request_volume: 3
+    load_balancer:
+      strategy: "round_robin"
+      instances:
+        - "http://event-bus-service:8004"
+    routes:
+      - path: "/events/*"
+        methods: ["GET", "POST", "PUT", "DELETE"]
+        auth_required: true
+        rate_limit:
+          requests_per_minute: 200
+          burst: 400
+
+  file-upload-service:
+    name: "file-upload-service"
+    base_url: "http://file-upload-service:8005"
+    health_check_path: "/health"
+    timeout: 60s  # Longer timeout for file uploads
+    retry_attempts: 2
+    circuit_breaker:
+      enabled: true
+      failure_threshold: 3
+      recovery_timeout: 60s
+      test_request_volume: 2
+    load_balancer:
+      strategy: "round_robin"
+      instances:
+        - "http://file-upload-service:8005"
+    routes:
+      - path: "/uploads/*"
+        methods: ["GET", "POST", "DELETE"]
+        auth_required: true
+        rate_limit:
+          requests_per_minute: 20
+          burst: 40
+        max_body_size: "50MB"
+
+# Proxy Configuration
+proxy:
+  timeout: 30s
+  keep_alive: 30s
+  max_idle_conns: 100
+  max_idle_conns_per_host: 10
+  idle_conn_timeout: 90s
+  tls_handshake_timeout: 10s
+  expect_continue_timeout: 1s
+
+# Validation Configuration - Step 1 & 2 from Architecture
+validation:
+  parameter_validation:
+    enabled: true
+    max_params: 50
+    max_param_length: 1000
+    required_headers:
+      - "Content-Type"
+      - "User-Agent"
+    forbidden_headers:
+      - "X-Admin-Secret"
+  
+  whitelist_validation:
+    enabled: true
+    allowed_ips:
+      - "0.0.0.0/0"  # Allow all in development
+    blocked_ips: []
+    allowed_countries:
+      - "US"
+      - "CA"
+      - "GB"
+      - "DE"
+      - "FR"
+      - "AU"
+      - "BD"  # Bangladesh
+    user_agent_whitelist:
+      - "*"  # Allow all user agents
+    rate_limit_by_ip: true
+
+# Rate Limiting Configuration - Step 4 from Architecture
+rate_limit:
+  enabled: true
+  storage: "redis"
+  redis_url: "${REDIS_URL}"
+  default_limit:
+    requests_per_minute: 100
+    burst: 200
+  endpoint_limits:
+    "/auth/login":
+      requests_per_minute: 5
+      burst: 10
+    "/auth/register":
+      requests_per_minute: 3
+      burst: 5
+    "/auth/forgot-password":
+      requests_per_minute: 2
+      burst: 3
+    "/forms":
+      requests_per_minute: 1000
+      burst: 2000
+    "/responses":
+      requests_per_minute: 500
+      burst: 1000
+    "/analytics":
+      requests_per_minute: 100
+      burst: 200
+    "/uploads":
+      requests_per_minute: 20
+      burst: 40
+
+# Service Discovery Configuration - Step 5 from Architecture
+discovery:
+  enabled: true
+  type: "static"  # Can be "consul", "etcd", "kubernetes", "static"
+  health_check_interval: 30s
+  unhealthy_threshold: 3
+  healthy_threshold: 2
+  service_registry:
+    consul:
+      address: "consul:8500"
+      health_check: true
+    kubernetes:
+      in_cluster: true
+      namespace: "x-form"
+
+# Logging Configuration
+log:
+  level: "info"
+  format: "json"
+  output: "stdout"
+  file_path: "/app/logs/gateway.log"
+  max_size: 100  # MB
+  max_backups: 5
+  max_age: 30  # days
+  compress: true
+
+# Metrics Configuration
+metrics:
+  enabled: true
+  port: 9090
+  path: "/metrics"
+  prometheus:
+    enabled: true
+    push_gateway: "prometheus:9091"
+    job_name: "x-form-api-gateway"
+    push_interval: 15s
+
+# CORS Configuration
+cors:
+  allowed_origins:
+    - "http://localhost:3000"
+    - "http://localhost:3001"
+    - "https://app.xform.dev"
+    - "https://admin.xform.dev"
+  allowed_methods:
+    - "GET"
+    - "POST"
+    - "PUT"
+    - "DELETE"
+    - "PATCH"
+    - "OPTIONS"
+  allowed_headers:
+    - "Origin"
+    - "Content-Type"
+    - "Accept"
+    - "Authorization"
+    - "X-API-Key"
+    - "X-Correlation-ID"
+    - "X-Request-ID"
+  exposed_headers:
+    - "X-Correlation-ID"
+    - "X-Request-ID"
+    - "X-RateLimit-Limit"
+    - "X-RateLimit-Remaining"
+    - "X-RateLimit-Reset"
+  credentials: true
+  max_age: 86400
+
+# Database Configuration (if gateway needs persistence)
+database:
+  host: "${DB_HOST}"
+  port: 5432
+  name: "${DB_NAME}"
+  user: "${DB_USER}"
+  password: "${DB_PASSWORD}"
+  ssl_mode: "disable"
+  max_connections: 25
+  max_idle_connections: 10
+  connection_lifetime: 300s
+
+# Cache Configuration
+cache:
+  redis:
+    url: "${REDIS_URL}"
+    password: "${REDIS_PASSWORD}"
+    db: 0
+    pool_size: 10
+    min_idle_conns: 5
+    dial_timeout: 5s
+    read_timeout: 3s
+    write_timeout: 3s
+    pool_timeout: 4s
+    idle_timeout: 300s
+
+# Circuit Breaker Global Configuration
+circuit_breaker:
+  enabled: true
+  failure_threshold: 5
+  recovery_timeout: 30s
+  test_request_volume: 3
+  success_threshold: 2
+
+# Load Balancer Global Configuration
+load_balancer:
+  default_strategy: "round_robin"
+  health_check_enabled: true
+  health_check_interval: 30s
+  health_check_timeout: 5s
+  max_retries: 3
+  retry_delay: 1s
+
+# Feature Flags
+features:
+  swagger_ui: true
+  metrics_endpoint: true
+  health_endpoint: true
+  admin_api: true
+  request_tracing: true
+  response_caching: true
+  request_logging: true
+  circuit_breaker: true
+  rate_limiting: true
+  authentication: true
+  service_discovery: true

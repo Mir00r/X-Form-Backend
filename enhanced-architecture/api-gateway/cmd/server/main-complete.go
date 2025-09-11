@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -26,16 +27,16 @@ import (
 
 // HealthResponse represents the health check response
 type HealthResponse struct {
-	Status    string `json:"status" example:"healthy"`
-	Timestamp string `json:"timestamp" example:"2025-09-12T01:35:03+08:00"`
+	Status    string            `json:"status" example:"healthy"`
+	Timestamp string            `json:"timestamp" example:"2025-09-12T01:35:03+08:00"`
 	Services  map[string]string `json:"services,omitempty"`
 } // @name HealthResponse
 
-// GatewayInfoResponse represents the gateway info response  
+// GatewayInfoResponse represents the gateway info response
 type GatewayInfoResponse struct {
-	Message string `json:"message" example:"Enhanced X-Form API Gateway"`
-	Version string `json:"version" example:"1.0.0"`
-	Path    string `json:"path" example:"/"`
+	Message  string   `json:"message" example:"Enhanced X-Form API Gateway"`
+	Version  string   `json:"version" example:"1.0.0"`
+	Path     string   `json:"path" example:"/"`
 	Features []string `json:"features"`
 } // @name GatewayInfoResponse
 
@@ -107,11 +108,11 @@ func main() {
 	// Start server in a goroutine
 	go func() {
 		logger.Info("🚀 Enhanced API Gateway starting", logger.Fields{
-			"port": port,
+			"port":        port,
 			"environment": cfg.Environment,
 			"features": []string{
 				"Parameter Validation",
-				"Whitelist Validation", 
+				"Whitelist Validation",
 				"Authentication/Authorization",
 				"Rate Limiting",
 				"Service Discovery",
@@ -158,12 +159,12 @@ func setupMiddlewareChain(router *gin.Engine, cfg *config.Config, logger logger.
 	router.Use(gin.Logger())
 	router.Use(gin.Recovery())
 
-	// Step 2: Whitelist Validation  
+	// Step 2: Whitelist Validation
 	router.Use(func(c *gin.Context) {
 		// Convert Gin context to standard HTTP for middleware compatibility
 		w := c.Writer
 		r := c.Request
-		
+
 		// Apply whitelist validation
 		whitelistMiddleware := middleware.WhitelistValidation(cfg.Whitelist)
 		whitelistMiddleware(func(w http.ResponseWriter, r *http.Request) {
@@ -175,14 +176,14 @@ func setupMiddlewareChain(router *gin.Engine, cfg *config.Config, logger logger.
 	router.Use(func(c *gin.Context) {
 		w := c.Writer
 		r := c.Request
-		
+
 		// Skip auth for health and docs endpoints
-		if r.URL.Path == "/health" || r.URL.Path == "/metrics" || 
-		   strings.HasPrefix(r.URL.Path, "/swagger") {
+		if r.URL.Path == "/health" || r.URL.Path == "/metrics" ||
+			strings.HasPrefix(r.URL.Path, "/swagger") {
 			c.Next()
 			return
 		}
-		
+
 		// Apply authentication
 		authMiddleware := middleware.Authentication(cfg.Auth)
 		authMiddleware(func(w http.ResponseWriter, r *http.Request) {
@@ -194,7 +195,7 @@ func setupMiddlewareChain(router *gin.Engine, cfg *config.Config, logger logger.
 	router.Use(func(c *gin.Context) {
 		w := c.Writer
 		r := c.Request
-		
+
 		// Apply rate limiting
 		rateLimitMiddleware := middleware.RateLimiting(cfg.RateLimit)
 		rateLimitMiddleware(func(w http.ResponseWriter, r *http.Request) {
@@ -203,7 +204,7 @@ func setupMiddlewareChain(router *gin.Engine, cfg *config.Config, logger logger.
 	})
 
 	// Step 5: Service Discovery (handled in handler)
-	// Step 6: Request Transformation (handled in handler)  
+	// Step 6: Request Transformation (handled in handler)
 	// Step 7: Reverse Proxy (handled in handler)
 }
 
@@ -217,7 +218,7 @@ func setupRoutes(router *gin.Engine, h *handler.Handler, cfg *config.Config, log
 		healthCheck(c, h, logger)
 	})
 
-	// Metrics endpoint  
+	// Metrics endpoint
 	router.GET("/metrics", func(c *gin.Context) {
 		metricsHandler(c, metrics)
 	})
@@ -312,13 +313,13 @@ func setupServiceRoutes(router *gin.Engine, h *handler.Handler) {
 // @Router /api/v1/health [get]
 func healthCheck(c *gin.Context, h *handler.Handler, logger logger.Logger) {
 	services := h.CheckServicesHealth()
-	
+
 	response := HealthResponse{
 		Status:    "healthy",
 		Timestamp: time.Now().Format(time.RFC3339),
 		Services:  services,
 	}
-	
+
 	c.JSON(http.StatusOK, response)
 }
 
@@ -330,7 +331,7 @@ func healthCheck(c *gin.Context, h *handler.Handler, logger logger.Logger) {
 // @Produce plain
 // @Success 200 {string} string "Prometheus metrics format"
 // @Router /metrics [get]
-// @Router /api/v1/metrics [get]  
+// @Router /api/v1/metrics [get]
 func metricsHandler(c *gin.Context, metrics *metrics.Collector) {
 	c.Header("Content-Type", "text/plain")
 	metricsData := metrics.Export()
@@ -353,7 +354,7 @@ func gatewayInfo(c *gin.Context) {
 		Features: []string{
 			"Parameter Validation",
 			"Whitelist Validation",
-			"Authentication/Authorization", 
+			"Authentication/Authorization",
 			"Rate Limiting",
 			"Service Discovery",
 			"Request Transformation",

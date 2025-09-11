@@ -26,7 +26,7 @@ const docTemplate = `{
     "paths": {
         "/": {
             "get": {
-                "description": "Returns information about the API Gateway",
+                "description": "Get comprehensive information about the Enhanced API Gateway including all implemented features",
                 "consumes": [
                     "application/json"
                 ],
@@ -34,15 +34,14 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Gateway"
+                    "info"
                 ],
                 "summary": "Gateway Information",
                 "responses": {
                     "200": {
-                        "description": "Gateway information",
+                        "description": "OK",
                         "schema": {
-                            "type": "object",
-                            "additionalProperties": true
+                            "$ref": "#/definitions/GatewayInfoResponse"
                         }
                     }
                 }
@@ -50,7 +49,7 @@ const docTemplate = `{
         },
         "/api/v1/health": {
             "get": {
-                "description": "Get the health status of the API Gateway",
+                "description": "Get the health status of the API Gateway and all connected services",
                 "consumes": [
                     "application/json"
                 ],
@@ -73,7 +72,7 @@ const docTemplate = `{
         },
         "/api/v1/metrics": {
             "get": {
-                "description": "Get basic metrics from the API Gateway",
+                "description": "Get comprehensive metrics from the API Gateway including request counts, latency, and service health",
                 "consumes": [
                     "application/json"
                 ],
@@ -86,7 +85,7 @@ const docTemplate = `{
                 "summary": "Metrics",
                 "responses": {
                     "200": {
-                        "description": "api_gateway_requests_total 0",
+                        "description": "Prometheus metrics format",
                         "schema": {
                             "type": "string"
                         }
@@ -96,7 +95,7 @@ const docTemplate = `{
         },
         "/health": {
             "get": {
-                "description": "Returns the health status of the API Gateway",
+                "description": "Get the health status of the API Gateway and all connected services",
                 "consumes": [
                     "application/json"
                 ],
@@ -104,15 +103,14 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Health"
+                    "health"
                 ],
                 "summary": "Health Check",
                 "responses": {
                     "200": {
-                        "description": "Health status",
+                        "description": "OK",
                         "schema": {
-                            "type": "object",
-                            "additionalProperties": true
+                            "$ref": "#/definitions/HealthResponse"
                         }
                     }
                 }
@@ -120,7 +118,7 @@ const docTemplate = `{
         },
         "/metrics": {
             "get": {
-                "description": "Returns basic metrics for the API Gateway",
+                "description": "Get comprehensive metrics from the API Gateway including request counts, latency, and service health",
                 "consumes": [
                     "application/json"
                 ],
@@ -128,12 +126,12 @@ const docTemplate = `{
                     "text/plain"
                 ],
                 "tags": [
-                    "Metrics"
+                    "monitoring"
                 ],
                 "summary": "Metrics",
                 "responses": {
                     "200": {
-                        "description": "Metrics data",
+                        "description": "Prometheus metrics format",
                         "schema": {
                             "type": "string"
                         }
@@ -146,6 +144,12 @@ const docTemplate = `{
         "GatewayInfoResponse": {
             "type": "object",
             "properties": {
+                "features": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
                 "message": {
                     "type": "string",
                     "example": "Enhanced X-Form API Gateway"
@@ -163,6 +167,12 @@ const docTemplate = `{
         "HealthResponse": {
             "type": "object",
             "properties": {
+                "services": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "string"
+                    }
+                },
                 "status": {
                     "type": "string",
                     "example": "healthy"
@@ -190,7 +200,7 @@ var SwaggerInfo = &swag.Spec{
 	BasePath:         "/",
 	Schemes:          []string{"http", "https"},
 	Title:            "Enhanced X-Form API Gateway",
-	Description:      "This is the enhanced X-Form Backend API Gateway with comprehensive documentation",
+	Description:      "This is the enhanced X-Form Backend API Gateway with comprehensive features including parameter validation, whitelist validation, authentication, rate limiting, service discovery, request transformation, and reverse proxy",
 	InfoInstanceName: "swagger",
 	SwaggerTemplate:  docTemplate,
 	LeftDelim:        "{{",
