@@ -1,0 +1,124 @@
+basePath: /
+definitions:
+  GatewayInfoResponse:
+    properties:
+      message:
+        example: Enhanced X-Form API Gateway
+        type: string
+      path:
+        example: /
+        type: string
+      version:
+        example: 1.0.0
+        type: string
+    type: object
+  HealthResponse:
+    properties:
+      status:
+        example: healthy
+        type: string
+      timestamp:
+        example: "2025-09-12T01:35:03+08:00"
+        type: string
+    type: object
+host: localhost:8080
+info:
+  contact:
+    email: support@swagger.io
+    name: API Support
+    url: http://www.swagger.io/support
+  description: This is the enhanced X-Form Backend API Gateway with comprehensive
+    documentation
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+  termsOfService: http://swagger.io/terms/
+  title: Enhanced X-Form API Gateway
+  version: 1.0.0
+paths:
+  /:
+    get:
+      consumes:
+      - application/json
+      description: Returns information about the API Gateway
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Gateway information
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Gateway Information
+      tags:
+      - Gateway
+  /api/v1/health:
+    get:
+      consumes:
+      - application/json
+      description: Get the health status of the API Gateway
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/HealthResponse'
+      summary: Health Check
+      tags:
+      - health
+  /api/v1/metrics:
+    get:
+      consumes:
+      - application/json
+      description: Get basic metrics from the API Gateway
+      produces:
+      - text/plain
+      responses:
+        "200":
+          description: api_gateway_requests_total 0
+          schema:
+            type: string
+      summary: Metrics
+      tags:
+      - monitoring
+  /health:
+    get:
+      consumes:
+      - application/json
+      description: Returns the health status of the API Gateway
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Health status
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Health Check
+      tags:
+      - Health
+  /metrics:
+    get:
+      consumes:
+      - application/json
+      description: Returns basic metrics for the API Gateway
+      produces:
+      - text/plain
+      responses:
+        "200":
+          description: Metrics data
+          schema:
+            type: string
+      summary: Metrics
+      tags:
+      - Metrics
+schemes:
+- http
+- https
+securityDefinitions:
+  ApiKeyAuth:
+    in: header
+    name: Authorization
+    type: apiKey
+swagger: "2.0"

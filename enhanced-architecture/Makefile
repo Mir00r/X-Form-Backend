@@ -1,7 +1,7 @@
 # Enhanced Architecture Makefile
 # Provides development, testing, and deployment commands
 
-.PHONY: help build test lint dev-start dev-stop clean docker-build docker-up docker-down setup dev-local test-local
+.PHONY: help build test lint dev-start dev-stop clean docker-build docker-up docker-down setup dev-local test-local docs-generate docs-serve
 
 # Default target
 help: ## Show this help message
@@ -27,7 +27,7 @@ test-local: ## Run tests locally (no Docker)
 	@./test-all.sh
 
 # Build commands
-build: ## Build API Gateway
+build: docs-generate ## Build API Gateway with Swagger docs
 	@echo "Building API Gateway..."
 	@cd api-gateway && go build -o bin/gateway ./cmd/server
 
@@ -47,6 +47,30 @@ lint: ## Run linter
 		go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest; \
 		$(HOME)/go/bin/golangci-lint run; \
 	fi
+
+# Documentation commands
+docs-generate: ## Generate Swagger documentation
+	@echo "Generating Swagger documentation..."
+	@cd api-gateway && \
+	if command -v swag >/dev/null 2>&1; then \
+		swag init -g cmd/server/main.go -o docs; \
+	elif test -f $(shell go env GOPATH)/bin/swag; then \
+		$(shell go env GOPATH)/bin/swag init -g cmd/server/main.go -o docs; \
+	else \
+		echo "⚠️  swag not found. Installing..."; \
+		go install github.com/swaggo/swag/cmd/swag@latest; \
+		$(shell go env GOPATH)/bin/swag init -g cmd/server/main.go -o docs; \
+	fi
+
+docs-serve: build ## Start API Gateway with Swagger documentation
+	@echo "Starting API Gateway with Swagger documentation..."
+	@echo "📚 Swagger UI will be available at: http://localhost:8080/swagger/index.html"
+	@cd api-gateway && PORT=8080 ./bin/gateway
+
+test-swagger: build ## Test all API endpoints including Swagger
+	@echo "Testing API Gateway with Swagger..."
+	@chmod +x test-swagger.sh
+	@./test-swagger.sh
 
 # Docker Development commands
 dev-start: ## Start development environment with Docker
