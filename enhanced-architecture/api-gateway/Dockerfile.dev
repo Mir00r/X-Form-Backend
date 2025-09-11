@@ -1,0 +1,79 @@
+# Development Dockerfile for API Gateway
+# Optimized for development with hot reloading and debugging capabilities
+
+FROM golang:1.21-alpine AS base
+
+# Install development dependencies
+RUN apk add --no-cache \
+    git \
+    curl \
+    ca-certificates \
+    tzdata \
+    make \
+    gcc \
+    musl-dev
+
+# Set working directory
+WORKDIR /app
+
+# Install air for hot reloading (development)
+RUN go install github.com/cosmtrek/air@latest
+
+# Copy go mod files
+COPY go.mod go.sum ./
+
+# Download dependencies
+RUN go mod download
+
+# Copy source code
+COPY . .
+
+# Create bin directory
+RUN mkdir -p bin
+
+# Development stage
+FROM base AS development
+
+# Expose port
+EXPOSE 8080
+
+# Install debugging tools
+RUN go install github.com/go-delve/delve/cmd/dlv@latest
+
+# Create air configuration
+COPY .air.toml .
+
+# Command for development with hot reloading
+CMD ["air", "-c", ".air.toml"]
+
+# Production build stage
+FROM base AS builder
+
+# Build the application
+RUN CGO_ENABLED=0 GOOS=linux go build \
+    -a -installsuffix cgo \
+    -ldflags '-extldflags "-static"' \
+    -o bin/api-gateway \
+    ./cmd/server
+
+# Production stage
+FROM scratch AS production
+
+# Copy CA certificates
+COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
+
+# Copy timezone data
+COPY --from=builder /usr/share/zoneinfo /usr/share/zoneinfo
+
+# Copy the binary
+COPY --from=builder /app/bin/api-gateway /api-gateway
+
+# Expose port
+EXPOSE 8080
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD ["/api-gateway", "healthcheck"]
+
+# Run the binary
+ENTRYPOINT ["/api-gateway"]
