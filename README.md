@@ -157,6 +157,47 @@ make analytics-dev     # Analytics service development
 - **Cloud & Infra:** AWS (API Gateway, Lambda, S3, RDS, EventBridge)
 - **Containerization:** Docker + Kubernetes
 
+## 📁 Project Structure
+
+```
+X-Form-Backend/
+├── 📁 apps/                    # Microservices and applications
+│   ├── auth-service/           # User authentication service (Node.js)
+│   ├── form-service/           # Form management service (Go)
+│   ├── response-service/       # Response collection service (Node.js)
+│   ├── realtime-service/       # Real-time collaboration service (Go)
+│   ├── analytics-service/      # Analytics and reporting service (Python)
+│   ├── api-gateway/           # API gateway service
+│   ├── file-upload-service/   # File handling service
+│   ├── collaboration-service/ # Collaboration features
+│   └── event-bus-service/     # Event messaging service
+├── 📁 infrastructure/         # Infrastructure and deployment configs
+│   ├── containers/            # Docker Compose files
+│   ├── kubernetes/            # Kubernetes manifests
+│   ├── terraform/             # Infrastructure as Code
+│   ├── monitoring/            # Observability configs
+│   └── reverse-proxy/         # Load balancer configs
+├── 📁 tools/                  # Development and build tools
+│   ├── automation/            # Build automation (Makefile)
+│   └── scripts/               # Setup and deployment scripts
+├── 📁 docs/                   # Documentation
+│   ├── architecture/          # Architecture documentation
+│   ├── development/           # Development guides
+│   ├── deployment/            # Deployment guides
+│   └── operations/            # Operations guides
+├── 📁 configs/                # Configuration files
+│   └── environments/          # Environment-specific configs
+├── 📁 packages/               # Shared libraries and packages
+└── 📁 tests/                  # Integration and E2E tests
+```
+
+This structure follows industry standards with clear separation of concerns:
+- **Apps**: Business logic and microservices
+- **Infrastructure**: Deployment and infrastructure code
+- **Tools**: Development automation and scripts
+- **Docs**: Comprehensive documentation
+- **Configs**: Environment configurations
+
 ## Services
 
 ### Core Services

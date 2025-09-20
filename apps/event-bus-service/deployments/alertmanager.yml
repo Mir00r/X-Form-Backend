@@ -1,0 +1,235 @@
+# AlertManager Configuration for Event Bus Service
+# This configuration defines how alerts are routed and delivered
+
+global:
+  smtp_smarthost: 'localhost:587'
+  smtp_from: 'alerts@eventbus.com'
+  smtp_auth_username: 'alerts@eventbus.com'
+  smtp_auth_password: 'your-smtp-password'
+
+# Templates for alert notifications
+templates:
+  - '/etc/alertmanager/templates/*.tmpl'
+
+# Alert routing configuration
+route:
+  group_by: ['alertname', 'service', 'severity']
+  group_wait: 10s
+  group_interval: 10s
+  repeat_interval: 1h
+  receiver: 'web.hook'
+  routes:
+    # Critical alerts go to multiple channels
+    - match:
+        severity: critical
+      receiver: 'critical-alerts'
+      group_wait: 0s
+      repeat_interval: 5m
+    
+    # Service-specific routing
+    - match:
+        service: event-bus-service
+      receiver: 'event-bus-team'
+      routes:
+        - match:
+            category: http
+          receiver: 'http-alerts'
+        - match:
+            category: events
+          receiver: 'event-processing-alerts'
+        - match:
+            category: kafka
+          receiver: 'kafka-alerts'
+        - match:
+            category: cdc
+          receiver: 'cdc-alerts'
+    
+    # System and infrastructure alerts
+    - match:
+        category: system
+      receiver: 'infrastructure-team'
+    
+    # Business logic alerts
+    - match:
+        category: business
+      receiver: 'business-team'
+
+# Alert receivers configuration
+receivers:
+  # Default webhook receiver
+  - name: 'web.hook'
+    webhook_configs:
+      - url: 'http://localhost:5001/'
+        send_resolved: true
+
+  # Critical alerts - multiple notification channels
+  - name: 'critical-alerts'
+    email_configs:
+      - to: 'oncall@eventbus.com'
+        subject: '🚨 CRITICAL: {{ .GroupLabels.alertname }}'
+        body: |
+          {{ range .Alerts }}
+          Alert: {{ .Annotations.summary }}
+          Description: {{ .Annotations.description }}
+          Service: {{ .Labels.service }}
+          Instance: {{ .Labels.instance }}
+          Severity: {{ .Labels.severity }}
+          
+          Labels:
+          {{ range .Labels.SortedPairs }}  {{ .Name }}: {{ .Value }}
+          {{ end }}
+          
+          Annotations:
+          {{ range .Annotations.SortedPairs }}  {{ .Name }}: {{ .Value }}
+          {{ end }}
+          {{ end }}
+    
+    slack_configs:
+      - api_url: 'https://hooks.slack.com/services/YOUR/SLACK/WEBHOOK'
+        channel: '#critical-alerts'
+        title: '🚨 Critical Alert: {{ .GroupLabels.alertname }}'
+        text: |
+          {{ range .Alerts }}
+          *Alert:* {{ .Annotations.summary }}
+          *Description:* {{ .Annotations.description }}
+          *Service:* {{ .Labels.service }}
+          *Instance:* {{ .Labels.instance }}
+          *Severity:* {{ .Labels.severity }}
+          {{ if .Annotations.runbook_url }}*Runbook:* {{ .Annotations.runbook_url }}{{ end }}
+          {{ end }}
+    
+    pagerduty_configs:
+      - routing_key: 'your-pagerduty-integration-key'
+        description: '{{ .GroupLabels.alertname }} - {{ .GroupLabels.service }}'
+
+  # Event Bus Service team
+  - name: 'event-bus-team'
+    slack_configs:
+      - api_url: 'https://hooks.slack.com/services/YOUR/SLACK/WEBHOOK'
+        channel: '#event-bus-alerts'
+        title: '{{ .GroupLabels.alertname }}'
+        text: |
+          {{ range .Alerts }}
+          *Service:* {{ .Labels.service }}
+          *Alert:* {{ .Annotations.summary }}
+          *Description:* {{ .Annotations.description }}
+          *Instance:* {{ .Labels.instance }}
+          {{ if .Annotations.runbook_url }}*Runbook:* {{ .Annotations.runbook_url }}{{ end }}
+          {{ end }}
+
+  # HTTP-specific alerts
+  - name: 'http-alerts'
+    email_configs:
+      - to: 'api-team@eventbus.com'
+        subject: 'HTTP Alert: {{ .GroupLabels.alertname }}'
+        body: |
+          HTTP Alert Details:
+          {{ range .Alerts }}
+          Alert: {{ .Annotations.summary }}
+          Description: {{ .Annotations.description }}
+          Service: {{ .Labels.service }}
+          Instance: {{ .Labels.instance }}
+          Endpoint: {{ .Labels.endpoint }}
+          Method: {{ .Labels.method }}
+          Status: {{ .Labels.status }}
+          {{ end }}
+
+  # Event processing alerts
+  - name: 'event-processing-alerts'
+    slack_configs:
+      - api_url: 'https://hooks.slack.com/services/YOUR/SLACK/WEBHOOK'
+        channel: '#event-processing'
+        title: 'Event Processing Alert: {{ .GroupLabels.alertname }}'
+        text: |
+          {{ range .Alerts }}
+          *Alert:* {{ .Annotations.summary }}
+          *Description:* {{ .Annotations.description }}
+          *Event Type:* {{ .Labels.event_type }}
+          *Source:* {{ .Labels.source }}
+          *Topic:* {{ .Labels.topic }}
+          {{ end }}
+
+  # Kafka alerts
+  - name: 'kafka-alerts'
+    email_configs:
+      - to: 'kafka-team@eventbus.com'
+        subject: 'Kafka Alert: {{ .GroupLabels.alertname }}'
+        body: |
+          Kafka Alert Details:
+          {{ range .Alerts }}
+          Alert: {{ .Annotations.summary }}
+          Description: {{ .Annotations.description }}
+          Topic: {{ .Labels.topic }}
+          Partition: {{ .Labels.partition }}
+          Broker: {{ .Labels.broker }}
+          {{ end }}
+
+  # CDC alerts
+  - name: 'cdc-alerts'
+    slack_configs:
+      - api_url: 'https://hooks.slack.com/services/YOUR/SLACK/WEBHOOK'
+        channel: '#cdc-monitoring'
+        title: 'CDC Alert: {{ .GroupLabels.alertname }}'
+        text: |
+          {{ range .Alerts }}
+          *Alert:* {{ .Annotations.summary }}
+          *Description:* {{ .Annotations.description }}
+          *Connector:* {{ .Labels.connector }}
+          *Table:* {{ .Labels.table }}
+          *Operation:* {{ .Labels.operation }}
+          {{ end }}
+
+  # Infrastructure team
+  - name: 'infrastructure-team'
+    email_configs:
+      - to: 'infra@eventbus.com'
+        subject: 'Infrastructure Alert: {{ .GroupLabels.alertname }}'
+        body: |
+          Infrastructure Alert:
+          {{ range .Alerts }}
+          Alert: {{ .Annotations.summary }}
+          Description: {{ .Annotations.description }}
+          Instance: {{ .Labels.instance }}
+          Job: {{ .Labels.job }}
+          {{ end }}
+
+  # Business team
+  - name: 'business-team'
+    email_configs:
+      - to: 'business@eventbus.com'
+        subject: 'Business Metric Alert: {{ .GroupLabels.alertname }}'
+        body: |
+          Business Alert:
+          {{ range .Alerts }}
+          Alert: {{ .Annotations.summary }}
+          Description: {{ .Annotations.description }}
+          Metric: {{ .Labels.metric_name }}
+          Value: {{ .Labels.metric_value }}
+          {{ end }}
+
+# Inhibition rules to silence certain alerts when others are firing
+inhibit_rules:
+  # Silence non-critical alerts when critical alerts are firing
+  - source_match:
+      severity: 'critical'
+    target_match:
+      severity: 'warning'
+    equal: ['service', 'instance']
+
+  # Silence individual service alerts when the whole service is down
+  - source_match:
+      alertname: 'ServiceDown'
+    target_match_re:
+      alertname: 'High.*|.*Error.*'
+    equal: ['service', 'instance']
+
+  # Silence HTTP alerts when Kafka is down (dependency)
+  - source_match:
+      alertname: 'KafkaConnectionDown'
+    target_match_re:
+      alertname: 'High.*HTTP.*'
+    equal: ['instance']
+
+# Global settings for alert resolution
+global:
+  resolve_timeout: 5m

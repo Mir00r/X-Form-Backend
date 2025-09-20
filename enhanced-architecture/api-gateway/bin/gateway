@@ -1,4 +1,0 @@
-#!/bin/bash
-echo "This is a placeholder API Gateway binary"
-echo "The actual API Gateway could not be built due to code issues"
-echo "Please check the codebase for missing dependencies or implementation errors"

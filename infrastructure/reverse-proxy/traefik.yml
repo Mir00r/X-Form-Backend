@@ -1,0 +1,211 @@
+# Enhanced Traefik Configuration for Load Balancer
+# Following industry best practices for edge layer implementation
+# Author: X-Form Architecture Team
+# Version: 2.0
+# Description: Production-ready load balancer with advanced features
+
+# =============================================================================
+# GLOBAL CONFIGURATION
+# =============================================================================
+global:
+  # Disable version checking for security
+  checkNewVersion: false
+  # Disable anonymous usage statistics
+  sendAnonymousUsage: false
+
+# =============================================================================
+# API AND DASHBOARD CONFIGURATION
+# =============================================================================
+api:
+  # Enable dashboard for monitoring
+  dashboard: true
+  # Disable debug mode for production
+  debug: false
+  # Secure API access (should be behind authentication in production)
+  insecure: true
+
+# =============================================================================
+# ENTRY POINTS (EDGE LAYER)
+# =============================================================================
+entryPoints:
+  # HTTP Entry Point (redirects to HTTPS)
+  web:
+    address: ":80"
+    # Enhanced HTTP configuration
+    http:
+      # Automatic HTTPS redirect
+      redirections:
+        entryPoint:
+          to: websecure
+          scheme: https
+          permanent: true
+      # Enhanced security headers
+      middlewares:
+        - security-headers@file
+        - compression@file
+    # Advanced transport configuration
+    transport:
+      lifeCycle:
+        requestAcceptGraceTimeout: "10s"
+        graceTimeOut: "10s"
+      respondingTimeouts:
+        readTimeout: "60s"
+        writeTimeout: "60s"
+        idleTimeout: "120s"
+        
+  # HTTPS Entry Point (main secure entry)
+  websecure:
+    address: ":443"
+    http:
+      tls:
+        # Use modern TLS configuration
+        options: modern
+        certResolver: letsencrypt
+        # Enable TLS 1.3
+        minVersion: VersionTLS13
+    # Enhanced transport settings for HTTPS
+    transport:
+      lifeCycle:
+        requestAcceptGraceTimeout: "15s"
+        graceTimeOut: "15s"
+      respondingTimeouts:
+        readTimeout: "300s"
+        writeTimeout: "300s"
+        idleTimeout: "300s"
+        
+  # Traefik Dashboard Entry Point
+  traefik:
+    address: ":8080"
+    
+  # WebSocket Entry Point (dedicated for real-time services)
+  websocket:
+    address: ":8002"
+    # WebSocket specific configuration
+    transport:
+      respondingTimeouts:
+        readTimeout: "0s"  # No timeout for WebSocket
+        writeTimeout: "0s"
+        idleTimeout: "3600s"  # 1 hour idle timeout
+
+# =============================================================================
+# CERTIFICATE RESOLVERS (TLS MANAGEMENT)
+# =============================================================================
+certificatesResolvers:
+  # Let's Encrypt resolver for automatic SSL certificates
+  letsencrypt:
+    acme:
+      # Production environment email
+      email: admin@xform.dev
+      # Certificate storage location
+      storage: /data/acme.json
+      # Use HTTP challenge for domain validation
+      httpChallenge:
+        entryPoint: web
+      # Alternative: DNS challenge for wildcard certificates
+      # dnsChallenge:
+      #   provider: cloudflare
+      #   resolvers:
+      #     - "1.1.1.1:53"
+      #     - "1.0.0.1:53"
+
+# =============================================================================
+# PROVIDERS (SERVICE DISCOVERY)
+# =============================================================================
+providers:
+  # Docker provider for container service discovery
+  docker:
+    # Only expose services with traefik.enable=true label
+    exposedByDefault: false
+    # Network to use for container communication
+    network: xform-network
+    # Watch for container changes
+    watch: true
+    # Default rule for services
+    defaultRule: "Host(`{{ normalize .Name }}.localhost`)"
+    # Enable Swarm mode if using Docker Swarm
+    swarmMode: false
+    
+  # File provider for static configuration
+  file:
+    # Directory containing dynamic configuration files
+    directory: /etc/traefik/dynamic
+    # Watch for file changes
+    watch: true
+    
+  # HTTP provider for remote configuration (optional)
+  # http:
+  #   endpoint: "http://configuration-service:8080/traefik"
+  #   pollInterval: "30s"
+
+# =============================================================================
+# LOGGING CONFIGURATION
+# =============================================================================
+log:
+  # Log level (DEBUG, INFO, WARN, ERROR, FATAL, PANIC)
+  level: INFO
+  # Log file path (leave empty for stdout)
+  filePath: "/var/log/traefik/traefik.log"
+  # Log format (json or common)
+  format: json
+
+# Access logs for request tracking
+accessLog:
+  # Access log file path
+  filePath: "/var/log/traefik/access.log"
+  # Log format
+  format: json
+  # Buffer size for performance
+  bufferingSize: 100
+  # Fields to include/exclude
+  fields:
+    defaultMode: keep
+    names:
+      # Redact sensitive information
+      ClientUsername: drop
+      Authorization: drop
+      Cookie: drop
+    headers:
+      defaultMode: keep
+      names:
+        User-Agent: redact
+        Authorization: drop
+        Cookie: drop
+
+# =============================================================================
+# METRICS CONFIGURATION
+# =============================================================================
+metrics:
+  # Prometheus metrics
+  prometheus:
+    # Add Prometheus labels
+    addEntryPointsLabels: true
+    addServicesLabels: true
+    # Metrics port (default: 8082)
+    # address: ":8082"
+    
+# =============================================================================
+# TRACING CONFIGURATION (OPTIONAL)
+# =============================================================================
+# tracing:
+#   jaeger:
+#     samplingServerURL: "http://jaeger:14268/api/sampling"
+#     localAgentHostPort: "jaeger:6831"
+
+# =============================================================================
+# PILOT CONFIGURATION (TRAEFIK CLOUD)
+# =============================================================================
+# pilot:
+#   token: "your-pilot-token"
+
+# =============================================================================
+# EXPERIMENTAL FEATURES
+# =============================================================================
+experimental:
+  # Enable HTTP/3 support
+  http3: true
+  # Enable plugins
+  plugins:
+    # Rate limiting plugin
+    rate-limit:
+      moduleName: "github.com/traefik/plugin-ratelimit"
+      version: "v0.4.1"

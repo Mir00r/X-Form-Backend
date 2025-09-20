@@ -1,0 +1,289 @@
+# Enhanced Dynamic Configuration for Traefik Edge Layer
+# Following clean architecture principles and industry best practices
+# Author: X-Form Architecture Team
+# Version: 2.0
+
+# =============================================================================
+# HTTP ROUTERS CONFIGURATION
+# =============================================================================
+http:
+  routers:
+    # Main API Gateway Router
+    api-gateway:
+      # Routing rule for main API
+      rule: "Host(`api.localhost`) || Host(`api.xform.dev`)"
+      # Target service
+      service: api-gateway-service
+      # Entry point
+      entryPoints:
+        - websecure
+      # Middleware chain (following the numbered sequence from diagram)
+      middlewares:
+        - security-headers        # Security headers first
+        - rate-limit-global      # Global rate limiting
+        - parameter-validation   # Step 1: Parameter validation
+        - whitelist-validation   # Step 2: Whitelist validation
+        - auth-validation        # Step 3: Authentication/Authorization
+        - service-rate-limit     # Step 4: Service-specific rate limiting
+        - request-logging        # Logging middleware
+        - compression           # Response compression
+      # TLS configuration
+      tls:
+        certResolver: letsencrypt
+        options: modern
+        
+    # WebSocket Router for Real-time Service
+    websocket-router:
+      rule: "Host(`ws.localhost`) || Host(`ws.xform.dev`) || (Host(`api.localhost`) && PathPrefix(`/ws/`))"
+      service: realtime-service
+      entryPoints:
+        - websocket
+      middlewares:
+        - websocket-headers
+        - auth-validation
+        - websocket-rate-limit
+        
+    # Admin Dashboard Router
+    admin-dashboard:
+      rule: "Host(`admin.localhost`) || Host(`admin.xform.dev`)"
+      service: admin-service
+      entryPoints:
+        - websecure
+      middlewares:
+        - security-headers
+        - admin-auth
+        - admin-rate-limit
+      tls:
+        certResolver: letsencrypt
+
+# =============================================================================
+# HTTP SERVICES CONFIGURATION
+# =============================================================================
+  services:
+    # API Gateway Service with Load Balancing
+    api-gateway-service:
+      loadBalancer:
+        # Multiple instances for high availability
+        servers:
+          - url: "http://api-gateway-1:8080"
+          - url: "http://api-gateway-2:8080"
+          - url: "http://api-gateway-3:8080"
+        # Health check configuration
+        healthCheck:
+          path: "/health"
+          interval: "30s"
+          timeout: "5s"
+          retries: 3
+          headers:
+            X-Health-Check: "traefik"
+        # Sticky sessions for stateful applications
+        sticky:
+          cookie:
+            name: "xform-session"
+            secure: true
+            httpOnly: true
+            sameSite: "strict"
+        # Circuit breaker configuration
+        responseForwarding:
+          flushInterval: "100ms"
+          
+    # Real-time Service for WebSocket connections
+    realtime-service:
+      loadBalancer:
+        servers:
+          - url: "http://realtime-service-1:8083"
+          - url: "http://realtime-service-2:8083"
+        healthCheck:
+          path: "/health"
+          interval: "15s"
+          timeout: "3s"
+        # Special configuration for WebSocket
+        serversTransport: websocket-transport
+        
+    # Admin Service
+    admin-service:
+      loadBalancer:
+        servers:
+          - url: "http://admin-service:8090"
+        healthCheck:
+          path: "/admin/health"
+          interval: "60s"
+
+# =============================================================================
+# MIDDLEWARES CONFIGURATION (Following diagram steps 1-7)
+# =============================================================================
+  middlewares:
+    # Security Headers Middleware
+    security-headers:
+      headers:
+        # HTTPS Security
+        frameDeny: true
+        contentTypeNosniff: true
+        browserXssFilter: true
+        stsSeconds: 31536000
+        stsIncludeSubdomains: true
+        stsPreload: true
+        # Content Security Policy
+        contentSecurityPolicy: "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'"
+        # Additional security headers
+        customRequestHeaders:
+          X-Forwarded-Proto: "https"
+        customResponseHeaders:
+          X-Frame-Options: "DENY"
+          X-Content-Type-Options: "nosniff"
+          X-XSS-Protection: "1; mode=block"
+          Referrer-Policy: "strict-origin-when-cross-origin"
+
+    # Step 1: Parameter Validation Middleware
+    parameter-validation:
+      plugin:
+        param-validator:
+          rules:
+            # Validate API endpoints
+            - path: "/api/v1/forms"
+              methods: ["POST", "PUT"]
+              required: ["title", "description"]
+              validation:
+                title: "^[a-zA-Z0-9\\s]{1,100}$"
+                description: "^.{1,500}$"
+            - path: "/api/v1/auth/signup"
+              methods: ["POST"]
+              required: ["email", "password", "firstName", "lastName"]
+              validation:
+                email: "^[\\w\\.-]+@[\\w\\.-]+\\.[a-zA-Z]{2,}$"
+                password: "^.{8,}$"
+
+    # Step 2: Whitelist Validation Middleware
+    whitelist-validation:
+      ipWhiteList:
+        sourceRange:
+          # Allow internal networks
+          - "10.0.0.0/8"
+          - "172.16.0.0/12"
+          - "192.168.0.0/16"
+          # Allow Cloudflare IPs (if using Cloudflare)
+          - "103.21.244.0/22"
+          - "103.22.200.0/22"
+          - "103.31.4.0/22"
+        ipStrategy:
+          depth: 2
+          excludedIPs:
+            - "127.0.0.1"
+
+    # Step 3: Authentication/Authorization Middleware
+    auth-validation:
+      forwardAuth:
+        address: "http://auth-service:8081/api/v1/auth/validate"
+        trustForwardHeader: true
+        authResponseHeaders:
+          - "X-User-ID"
+          - "X-User-Role"
+          - "X-User-Email"
+        authRequestHeaders:
+          - "Authorization"
+          - "X-Original-URL"
+
+    # Step 4: Rate Limiting Middleware (Multi-tier)
+    rate-limit-global:
+      rateLimit:
+        average: 1000  # 1000 requests per second globally
+        burst: 2000    # Allow bursts up to 2000
+        period: "1s"
+        
+    service-rate-limit:
+      plugin:
+        rate-limit-advanced:
+          rules:
+            # Per IP limits
+            - period: "1m"
+              average: 100
+              burst: 200
+              key: "client.ip"
+            # Per user limits (for authenticated requests)
+            - period: "1h"
+              average: 5000
+              burst: 10000
+              key: "jwt.sub"
+
+    # Admin-specific middlewares
+    admin-auth:
+      basicAuth:
+        users:
+          - "admin:$2y$10$..."  # Use proper bcrypt hash
+        realm: "X-Form Admin"
+
+    admin-rate-limit:
+      rateLimit:
+        average: 10   # Lower limit for admin endpoints
+        burst: 20
+        period: "1m"
+
+    # WebSocket-specific middlewares
+    websocket-headers:
+      headers:
+        customRequestHeaders:
+          Connection: "Upgrade"
+          Upgrade: "websocket"
+
+    websocket-rate-limit:
+      rateLimit:
+        average: 50   # WebSocket connections per minute
+        burst: 100
+        period: "1m"
+
+    # Step 6: Request Transformation Middleware
+    request-logging:
+      accessLog:
+        filters:
+          statusCodes: ["400-599"]
+          retryAttempts: true
+          minDuration: "100ms"
+
+    # Compression Middleware
+    compression:
+      compress:
+        excludedContentTypes:
+          - "text/event-stream"
+          - "application/grpc"
+
+# =============================================================================
+# TLS CONFIGURATION
+# =============================================================================
+tls:
+  options:
+    # Modern TLS configuration
+    modern:
+      minVersion: "VersionTLS13"
+      maxVersion: "VersionTLS13"
+      curvePreferences:
+        - CurveP521
+        - CurveP384
+      cipherSuites:
+        - "TLS_AES_256_GCM_SHA384"
+        - "TLS_CHACHA20_POLY1305_SHA256"
+        - "TLS_AES_128_GCM_SHA256"
+      alpnProtocols:
+        - "h2"
+        - "http/1.1"
+        
+    # Default TLS configuration for backwards compatibility
+    default:
+      minVersion: "VersionTLS12"
+      sslProtocols: ["TLSv1.2", "TLSv1.3"]
+      cipherSuites:
+        - "TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384"
+        - "TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305"
+        - "TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256"
+
+# =============================================================================
+# SERVER TRANSPORTS
+# =============================================================================
+serversTransports:
+  # WebSocket transport configuration
+  websocket-transport:
+    serverName: "websocket.xform.dev"
+    insecureSkipVerify: false
+    maxIdleConnsPerHost: 10
+    forwardingTimeouts:
+      dialTimeout: "30s"
+      responseHeaderTimeout: "30s"

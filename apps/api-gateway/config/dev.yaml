@@ -1,0 +1,62 @@
+# Development Configuration for Enhanced API Gateway
+
+environment: development
+log:
+  level: debug
+  format: json
+
+server:
+  port: 8080
+  timeout: 30s
+  read_timeout: 30s
+  write_timeout: 30s
+  idle_timeout: 60s
+
+auth:
+  jwt:
+    secret: "dev-secret-key-for-development-only"
+    expiration: 24h
+    issuer: "x-form-api-gateway"
+    audience: "x-form-backend"
+
+cors:
+  enabled: true
+  allowed_origins:
+    - "http://localhost:3000"
+    - "http://localhost:8080"
+  allowed_methods:
+    - "GET"
+    - "POST"
+    - "PUT"
+    - "DELETE"
+    - "OPTIONS"
+  allowed_headers:
+    - "Content-Type"
+    - "Authorization"
+    - "X-Request-ID"
+
+validation:
+  enabled: true
+  max_body_size: 10485760  # 10MB
+  timeout: 5s
+
+whitelist:
+  enabled: false  # Disabled for development
+  ips: []
+
+rate_limit:
+  enabled: true
+  requests_per_second: 100
+  burst: 200
+  cleanup_interval: 60s
+
+services:
+  auth-service:
+    url: "http://localhost:8081"
+    timeout: 30s
+  form-service:
+    url: "http://localhost:8082"
+    timeout: 30s
+  response-service:
+    url: "http://localhost:8083"
+    timeout: 30s

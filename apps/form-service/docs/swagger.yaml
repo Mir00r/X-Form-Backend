@@ -1,0 +1,1284 @@
+basePath: /api/v1
+definitions:
+  dto.ConditionDTO:
+    properties:
+      operator:
+        enum:
+        - equals
+        - not_equals
+        - contains
+        - not_contains
+        - greater_than
+        - less_than
+        example: equals
+        type: string
+      questionId:
+        example: q1
+        type: string
+      value:
+        example: "yes"
+        type: string
+    required:
+    - operator
+    - questionId
+    type: object
+  dto.ConditionalLogicDTO:
+    properties:
+      hideIf:
+        items:
+          $ref: '#/definitions/dto.ConditionDTO'
+        type: array
+      logic:
+        enum:
+        - AND
+        - OR
+        example: AND
+        type: string
+      showIf:
+        items:
+          $ref: '#/definitions/dto.ConditionDTO'
+        type: array
+    type: object
+  dto.CreateFormRequestDTO:
+    properties:
+      allowMultiple:
+        example: false
+        type: boolean
+      category:
+        example: feedback
+        maxLength: 100
+        type: string
+      description:
+        example: Please provide your feedback about our service
+        maxLength: 1000
+        type: string
+      expiresAt:
+        example: "2024-12-31T23:59:59Z"
+        type: string
+      isAnonymous:
+        example: false
+        type: boolean
+      isPublic:
+        example: true
+        type: boolean
+      questions:
+        items:
+          $ref: '#/definitions/dto.CreateQuestionRequestDTO'
+        minItems: 1
+        type: array
+      settings:
+        $ref: '#/definitions/dto.FormSettingsDTO'
+      tags:
+        items:
+          type: string
+        maxItems: 10
+        type: array
+      title:
+        example: Customer Feedback Form
+        maxLength: 255
+        minLength: 1
+        type: string
+    required:
+    - questions
+    - title
+    type: object
+  dto.CreateQuestionRequestDTO:
+    properties:
+      conditional:
+        $ref: '#/definitions/dto.ConditionalLogicDTO'
+      description:
+        example: Please enter your full name
+        maxLength: 1000
+        type: string
+      label:
+        example: What is your name?
+        maxLength: 500
+        minLength: 1
+        type: string
+      metadata:
+        additionalProperties: true
+        type: object
+      options:
+        items:
+          $ref: '#/definitions/dto.QuestionOptionDTO'
+        type: array
+      order:
+        example: 1
+        minimum: 0
+        type: integer
+      required:
+        example: true
+        type: boolean
+      type:
+        enum:
+        - text
+        - textarea
+        - number
+        - email
+        - date
+        - checkbox
+        - radio
+        - select
+        - file
+        example: text
+        type: string
+      validation:
+        $ref: '#/definitions/dto.QuestionValidationDTO'
+    required:
+    - label
+    - type
+    type: object
+  dto.DependencyStatusDTO:
+    properties:
+      error:
+        type: string
+      lastChecked:
+        example: "2024-01-01T12:00:00Z"
+        type: string
+      responseTimeMs:
+        example: 25
+        type: integer
+      status:
+        example: healthy
+        type: string
+    type: object
+  dto.ErrorDetail:
+    properties:
+      code:
+        type: string
+      details: {}
+      fields:
+        additionalProperties:
+          type: string
+        type: object
+      message:
+        type: string
+      metadata:
+        additionalProperties: true
+        type: object
+      path:
+        type: string
+      requestId:
+        type: string
+      timestamp:
+        type: string
+    type: object
+  dto.ErrorResponse:
+    properties:
+      correlationId:
+        type: string
+      error:
+        $ref: '#/definitions/dto.ErrorDetail'
+      message:
+        type: string
+      success:
+        type: boolean
+      timestamp:
+        type: string
+      version:
+        type: string
+    type: object
+  dto.FormResponseDTO:
+    properties:
+      allowMultiple:
+        example: false
+        type: boolean
+      category:
+        example: feedback
+        type: string
+      createdAt:
+        example: "2024-01-01T12:00:00Z"
+        type: string
+      createdBy:
+        $ref: '#/definitions/dto.UserInfoDTO'
+      description:
+        example: Please provide your feedback
+        type: string
+      expiresAt:
+        example: "2024-12-31T23:59:59Z"
+        type: string
+      id:
+        example: f123e4567-e89b-12d3-a456-426614174000
+        type: string
+      isAnonymous:
+        example: false
+        type: boolean
+      isPublic:
+        example: true
+        type: boolean
+      publishedAt:
+        example: "2024-01-01T12:00:00Z"
+        type: string
+      questions:
+        items:
+          $ref: '#/definitions/dto.QuestionResponseDTO'
+        type: array
+      settings:
+        $ref: '#/definitions/dto.FormSettingsDTO'
+      statistics:
+        $ref: '#/definitions/dto.FormStatisticsDTO'
+      status:
+        example: published
+        type: string
+      tags:
+        items:
+          type: string
+        type: array
+      title:
+        example: Customer Feedback Form
+        type: string
+      updatedAt:
+        example: "2024-01-01T12:00:00Z"
+        type: string
+    type: object
+  dto.FormSettingsDTO:
+    properties:
+      allowDrafts:
+        example: false
+        type: boolean
+      collectEmail:
+        example: true
+        type: boolean
+      customCss:
+        maxLength: 5000
+        type: string
+      metadata:
+        additionalProperties: true
+        type: object
+      notifyOnSubmission:
+        example: true
+        type: boolean
+      redirectUrl:
+        maxLength: 500
+        type: string
+      requireLogin:
+        example: false
+        type: boolean
+      showProgressBar:
+        example: true
+        type: boolean
+      thankYouMessage:
+        maxLength: 1000
+        type: string
+    type: object
+  dto.FormStatisticsDTO:
+    properties:
+      averageTimeSeconds:
+        example: 120
+        type: integer
+      completionRate:
+        example: 0.85
+        type: number
+      lastResponse:
+        example: "2024-01-01T12:00:00Z"
+        type: string
+      responseRate:
+        example: 0.75
+        type: number
+      totalResponses:
+        example: 150
+        type: integer
+      uniqueResponders:
+        example: 140
+        type: integer
+    type: object
+  dto.FormSummaryDTO:
+    properties:
+      createdAt:
+        example: "2024-01-01T12:00:00Z"
+        type: string
+      createdBy:
+        $ref: '#/definitions/dto.UserInfoDTO'
+      description:
+        example: Please provide your feedback
+        type: string
+      expiresAt:
+        example: "2024-12-31T23:59:59Z"
+        type: string
+      id:
+        example: f123e4567-e89b-12d3-a456-426614174000
+        type: string
+      isPublic:
+        example: true
+        type: boolean
+      publishedAt:
+        example: "2024-01-01T12:00:00Z"
+        type: string
+      statistics:
+        $ref: '#/definitions/dto.FormStatisticsDTO'
+      status:
+        example: published
+        type: string
+      title:
+        example: Customer Feedback Form
+        type: string
+      updatedAt:
+        example: "2024-01-01T12:00:00Z"
+        type: string
+    type: object
+  dto.HealthCheckResponseDTO:
+    properties:
+      dependencies:
+        $ref: '#/definitions/dto.HealthDependenciesDTO'
+      environment:
+        example: production
+        type: string
+      features:
+        items:
+          type: string
+        type: array
+      metrics:
+        $ref: '#/definitions/dto.HealthMetricsDTO'
+      service:
+        example: form-service
+        type: string
+      status:
+        example: healthy
+        type: string
+      timestamp:
+        example: "2024-01-01T12:00:00Z"
+        type: string
+      uptime:
+        example: 72h30m45s
+        type: string
+      version:
+        example: 1.0.0
+        type: string
+    type: object
+  dto.HealthDependenciesDTO:
+    properties:
+      authService:
+        $ref: '#/definitions/dto.DependencyStatusDTO'
+      database:
+        $ref: '#/definitions/dto.DependencyStatusDTO'
+      emailService:
+        $ref: '#/definitions/dto.DependencyStatusDTO'
+      storageService:
+        $ref: '#/definitions/dto.DependencyStatusDTO'
+    type: object
+  dto.HealthMetricsDTO:
+    properties:
+      activeConnections:
+        example: 25
+        type: integer
+      averageResponseTimeMs:
+        example: 150
+        type: integer
+      cpuUsagePercent:
+        example: 45.2
+        type: number
+      diskUsagePercent:
+        example: 35.8
+        type: number
+      errorRate:
+        example: 0.001
+        type: number
+      memoryUsagePercent:
+        example: 65.5
+        type: number
+      requestsPerSecond:
+        example: 10.5
+        type: number
+    type: object
+  dto.PaginatedResponse:
+    properties:
+      correlationId:
+        type: string
+      data: {}
+      message:
+        type: string
+      pagination:
+        $ref: '#/definitions/dto.Pagination'
+      success:
+        type: boolean
+      timestamp:
+        type: string
+      version:
+        type: string
+    type: object
+  dto.Pagination:
+    properties:
+      hasNext:
+        type: boolean
+      hasPrev:
+        type: boolean
+      page:
+        type: integer
+      pageSize:
+        type: integer
+      total:
+        type: integer
+      totalPages:
+        type: integer
+    type: object
+  dto.PublishFormRequestDTO:
+    properties:
+      message:
+        example: Form is now live and ready for responses
+        maxLength: 500
+        type: string
+      notifySubscribers:
+        example: false
+        type: boolean
+      scheduleAt:
+        example: "2024-01-15T09:00:00Z"
+        type: string
+    type: object
+  dto.QuestionOptionDTO:
+    properties:
+      label:
+        example: Option 1
+        maxLength: 255
+        type: string
+      order:
+        example: 1
+        minimum: 0
+        type: integer
+      value:
+        example: option1
+        maxLength: 255
+        type: string
+    required:
+    - label
+    - value
+    type: object
+  dto.QuestionResponseDTO:
+    properties:
+      conditional:
+        $ref: '#/definitions/dto.ConditionalLogicDTO'
+      createdAt:
+        example: "2024-01-01T12:00:00Z"
+        type: string
+      description:
+        example: Please enter your full name
+        type: string
+      id:
+        example: q123e4567-e89b-12d3-a456-426614174000
+        type: string
+      label:
+        example: What is your name?
+        type: string
+      metadata:
+        additionalProperties: true
+        type: object
+      options:
+        items:
+          $ref: '#/definitions/dto.QuestionOptionDTO'
+        type: array
+      order:
+        example: 1
+        type: integer
+      required:
+        example: true
+        type: boolean
+      type:
+        example: text
+        type: string
+      updatedAt:
+        example: "2024-01-01T12:00:00Z"
+        type: string
+      validation:
+        $ref: '#/definitions/dto.QuestionValidationDTO'
+    type: object
+  dto.QuestionValidationDTO:
+    properties:
+      allowedTypes:
+        example:
+        - jpg
+        - png
+        - pdf
+        items:
+          type: string
+        type: array
+      maxFileSize:
+        example: 5242880
+        type: integer
+      maxLength:
+        example: 100
+        type: integer
+      maxValue:
+        example: 100
+        type: number
+      minLength:
+        example: 2
+        type: integer
+      minValue:
+        example: 0
+        type: number
+      pattern:
+        example: ^[a-zA-Z ]+$
+        type: string
+    type: object
+  dto.SuccessResponse:
+    properties:
+      correlationId:
+        type: string
+      data: {}
+      message:
+        type: string
+      success:
+        type: boolean
+      timestamp:
+        type: string
+      version:
+        type: string
+    type: object
+  dto.UpdateFormRequestDTO:
+    properties:
+      allowMultiple:
+        type: boolean
+      category:
+        maxLength: 100
+        type: string
+      description:
+        maxLength: 1000
+        type: string
+      expiresAt:
+        type: string
+      isAnonymous:
+        type: boolean
+      isPublic:
+        type: boolean
+      settings:
+        $ref: '#/definitions/dto.FormSettingsDTO'
+      tags:
+        items:
+          type: string
+        maxItems: 10
+        type: array
+      title:
+        maxLength: 255
+        minLength: 1
+        type: string
+    type: object
+  dto.UserInfoDTO:
+    properties:
+      avatar:
+        example: https://example.com/avatar.jpg
+        type: string
+      email:
+        example: john@example.com
+        type: string
+      id:
+        example: u123e4567-e89b-12d3-a456-426614174000
+        type: string
+      name:
+        example: John Doe
+        type: string
+      username:
+        example: john_doe
+        type: string
+    type: object
+  dto.ValidationErrorDTO:
+    properties:
+      correlationId:
+        type: string
+      error:
+        $ref: '#/definitions/dto.ValidationErrorDetail'
+      message:
+        type: string
+      success:
+        type: boolean
+      timestamp:
+        type: string
+      version:
+        type: string
+    type: object
+  dto.ValidationErrorDetail:
+    properties:
+      code:
+        example: VALIDATION_ERROR
+        type: string
+      fields:
+        additionalProperties:
+          items:
+            type: string
+          type: array
+        type: object
+      message:
+        example: Input validation failed
+        type: string
+      metadata:
+        additionalProperties: true
+        type: object
+      path:
+        type: string
+      requestId:
+        type: string
+      timestamp:
+        type: string
+    type: object
+host: localhost:8080
+info:
+  contact:
+    email: form-service@example.com
+    name: Form Service Team
+  description: Comprehensive form management service built with Clean Architecture
+    and microservices best practices
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+  title: Form Service API
+  version: 1.0.0
+paths:
+  /forms:
+    get:
+      consumes:
+      - application/json
+      description: Get a paginated list of forms with optional filtering
+      parameters:
+      - default: 1
+        description: Page number
+        in: query
+        name: page
+        type: integer
+      - default: 20
+        description: Page size
+        in: query
+        name: pageSize
+        type: integer
+      - description: Filter by status
+        enum:
+        - draft
+        - published
+        - closed
+        - archived
+        in: query
+        name: status
+        type: string
+      - description: Filter by category
+        in: query
+        name: category
+        type: string
+      - description: Search in title and description
+        in: query
+        name: search
+        type: string
+      - default: created_at
+        description: Sort field
+        enum:
+        - created_at
+        - updated_at
+        - title
+        - response_count
+        in: query
+        name: sortBy
+        type: string
+      - default: desc
+        description: Sort order
+        enum:
+        - asc
+        - desc
+        in: query
+        name: sortOrder
+        type: string
+      - description: Filter by creator user ID
+        in: query
+        name: createdBy
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Forms retrieved successfully
+          schema:
+            allOf:
+            - $ref: '#/definitions/dto.PaginatedResponse'
+            - properties:
+                data:
+                  items:
+                    $ref: '#/definitions/dto.FormSummaryDTO'
+                  type: array
+              type: object
+        "400":
+          description: Invalid request parameters
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: List forms
+      tags:
+      - Forms
+    post:
+      consumes:
+      - application/json
+      description: Create a new form with questions and settings
+      parameters:
+      - description: Form creation request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/dto.CreateFormRequestDTO'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Form created successfully
+          schema:
+            allOf:
+            - $ref: '#/definitions/dto.SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.FormResponseDTO'
+              type: object
+        "400":
+          description: Invalid request
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "422":
+          description: Validation failed
+          schema:
+            $ref: '#/definitions/dto.ValidationErrorDTO'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Create a new form
+      tags:
+      - Forms
+  /forms/{id}:
+    delete:
+      consumes:
+      - application/json
+      description: Delete a form and all its responses
+      parameters:
+      - description: Form ID
+        format: uuid
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Form deleted successfully
+          schema:
+            $ref: '#/definitions/dto.SuccessResponse'
+        "400":
+          description: Invalid form ID
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "403":
+          description: Forbidden - not form owner
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "404":
+          description: Form not found
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "409":
+          description: Cannot delete published form
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Delete form
+      tags:
+      - Forms
+    get:
+      consumes:
+      - application/json
+      description: Retrieve a form with all its details
+      parameters:
+      - description: Form ID
+        format: uuid
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Form retrieved successfully
+          schema:
+            allOf:
+            - $ref: '#/definitions/dto.SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.FormResponseDTO'
+              type: object
+        "400":
+          description: Invalid form ID
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "404":
+          description: Form not found
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get form by ID
+      tags:
+      - Forms
+    put:
+      consumes:
+      - application/json
+      description: Update an existing form's details
+      parameters:
+      - description: Form ID
+        format: uuid
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Form update request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/dto.UpdateFormRequestDTO'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Form updated successfully
+          schema:
+            allOf:
+            - $ref: '#/definitions/dto.SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.FormResponseDTO'
+              type: object
+        "400":
+          description: Invalid request
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "403":
+          description: Forbidden - not form owner
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "404":
+          description: Form not found
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "422":
+          description: Validation failed
+          schema:
+            $ref: '#/definitions/dto.ValidationErrorDTO'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Update form
+      tags:
+      - Forms
+  /forms/{id}/archive:
+    post:
+      consumes:
+      - application/json
+      description: Archive a form for long-term storage
+      parameters:
+      - description: Form ID
+        format: uuid
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Form archived successfully
+          schema:
+            allOf:
+            - $ref: '#/definitions/dto.SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.FormResponseDTO'
+              type: object
+        "400":
+          description: Invalid form ID
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "403":
+          description: Forbidden - not form owner
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "404":
+          description: Form not found
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Archive form
+      tags:
+      - Forms
+  /forms/{id}/close:
+    post:
+      consumes:
+      - application/json
+      description: Close a form to stop accepting new responses
+      parameters:
+      - description: Form ID
+        format: uuid
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Form closed successfully
+          schema:
+            allOf:
+            - $ref: '#/definitions/dto.SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.FormResponseDTO'
+              type: object
+        "400":
+          description: Invalid form ID
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "403":
+          description: Forbidden - not form owner
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "404":
+          description: Form not found
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "409":
+          description: Form not published
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Close form
+      tags:
+      - Forms
+  /forms/{id}/duplicate:
+    post:
+      consumes:
+      - application/json
+      description: Create a copy of an existing form
+      parameters:
+      - description: Form ID
+        format: uuid
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Form duplicated successfully
+          schema:
+            allOf:
+            - $ref: '#/definitions/dto.SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.FormResponseDTO'
+              type: object
+        "400":
+          description: Invalid form ID
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "404":
+          description: Form not found
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Duplicate form
+      tags:
+      - Forms
+  /forms/{id}/publish:
+    post:
+      consumes:
+      - application/json
+      description: Publish a form to make it available for responses
+      parameters:
+      - description: Form ID
+        format: uuid
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Publish form request
+        in: body
+        name: request
+        schema:
+          $ref: '#/definitions/dto.PublishFormRequestDTO'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Form published successfully
+          schema:
+            allOf:
+            - $ref: '#/definitions/dto.SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.FormResponseDTO'
+              type: object
+        "400":
+          description: Invalid request
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "403":
+          description: Forbidden - not form owner
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "404":
+          description: Form not found
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "409":
+          description: Form already published
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Publish form
+      tags:
+      - Forms
+  /forms/{id}/statistics:
+    get:
+      consumes:
+      - application/json
+      description: Get detailed statistics for a form
+      parameters:
+      - description: Form ID
+        format: uuid
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Statistics retrieved successfully
+          schema:
+            allOf:
+            - $ref: '#/definitions/dto.SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.FormStatisticsDTO'
+              type: object
+        "400":
+          description: Invalid form ID
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "403":
+          description: Forbidden - not form owner
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "404":
+          description: Form not found
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get form statistics
+      tags:
+      - Forms
+  /health:
+    get:
+      consumes:
+      - application/json
+      description: Comprehensive health check including dependencies
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Service is healthy
+          schema:
+            $ref: '#/definitions/dto.HealthCheckResponseDTO'
+        "503":
+          description: Service is unhealthy
+          schema:
+            $ref: '#/definitions/dto.HealthCheckResponseDTO'
+      summary: Health check
+      tags:
+      - Health
+  /health/live:
+    get:
+      consumes:
+      - application/json
+      description: Check if service is alive and responsive
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Service is alive
+          schema:
+            $ref: '#/definitions/dto.SuccessResponse'
+        "503":
+          description: Service is not responsive
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      summary: Liveness check
+      tags:
+      - Health
+  /health/ready:
+    get:
+      consumes:
+      - application/json
+      description: Check if service is ready to accept requests
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Service is ready
+          schema:
+            $ref: '#/definitions/dto.SuccessResponse'
+        "503":
+          description: Service is not ready
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      summary: Readiness check
+      tags:
+      - Health
+  /metrics:
+    get:
+      consumes:
+      - application/json
+      description: Get performance and usage metrics
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Metrics retrieved successfully
+          schema:
+            allOf:
+            - $ref: '#/definitions/dto.SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.HealthMetricsDTO'
+              type: object
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      summary: Get service metrics
+      tags:
+      - Monitoring
+  /public/forms/{id}:
+    get:
+      consumes:
+      - application/json
+      description: Retrieve a public form that can be filled by anyone
+      parameters:
+      - description: Form ID
+        format: uuid
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Public form retrieved successfully
+          schema:
+            allOf:
+            - $ref: '#/definitions/dto.SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.FormResponseDTO'
+              type: object
+        "400":
+          description: Invalid form ID
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "404":
+          description: Form not found or not public
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      summary: Get public form
+      tags:
+      - Public
+securityDefinitions:
+  BearerAuth:
+    description: Type "Bearer" followed by a space and JWT token.
+    in: header
+    name: Authorization
+    type: apiKey
+swagger: "2.0"
