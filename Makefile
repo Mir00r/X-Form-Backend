@@ -51,6 +51,11 @@ setup: ## Initial project setup (run this first)
 	@$(MAKE) setup-env
 	@echo "$(GREEN)✅ Setup complete! Run 'make dev' to start development.$(RESET)"
 
+verify: ## Verify development environment setup
+	@echo "$(BLUE)🔍 Verifying development environment...$(RESET)"
+	@chmod +x tools/scripts/verify-dev-environment.sh
+	@./tools/scripts/verify-dev-environment.sh
+
 start: ## Start all services in production mode
 	@echo "$(GREEN)🚀 Starting all services in production mode...$(RESET)"
 	@docker compose -f $(DOCKER_COMPOSE_PROD) up -d

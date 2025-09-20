@@ -85,8 +85,14 @@ A microservices-based backend system for building and managing surveys with real
 - 📎 **File Handling**: Secure file uploads and CDN delivery
 ## ⚡ **Quick Start**
 
+### **🔧 For Developers - Complete Setup Guide**
+> **📖 [Complete Local Development Guide](docs/development/LOCAL_DEVELOPMENT_COMPLETE_GUIDE.md)** - Everything you need to know for local development, testing, and contributing
+
+> **⚡ [Developer Quick Reference](docs/development/DEVELOPER_QUICK_REFERENCE.md)** - Essential commands and endpoints for daily development
+
 ### **Prerequisites**
 - Docker and Docker Compose
+- Node.js 18+, Go 1.21+, Python 3.8+
 - `hey` load testing tool: `go install github.com/rakyll/hey@latest`
 
 ### **1. Clone and Setup**
@@ -101,6 +107,9 @@ make setup
 # Start Traefik + all microservices
 make start
 
+# OR for development with hot reload
+make dev
+
 # Check system health
 make health
 
@@ -109,7 +118,8 @@ make api-test
 ```
 
 ### **3. Access Points**
-- 🌐 **Main API**: http://api.localhost
+- 🌐 **Main API**: http://api.localhost (or http://localhost:8080)
+- 📚 **API Documentation**: http://localhost:8080/swagger/
 - 🔌 **WebSocket**: ws://ws.localhost
 - 📊 **Traefik Dashboard**: http://traefik.localhost:8080
 - 📈 **Grafana**: http://grafana.localhost:3000
@@ -124,7 +134,14 @@ make traefik-config    # Validate configuration
 make traefik-logs      # Show Traefik logs
 make arch-info         # Show architecture info
 
+# Development workflow
+make dev               # Start all services with hot reload
+make install-deps      # Install all dependencies
+make db-setup          # Setup databases
+make health            # Check all service health
+
 # Testing & monitoring
+make test              # Run all tests
 make load-test         # Performance testing
 make monitor           # Open dashboards
 make api-test          # Test endpoints
@@ -134,6 +151,40 @@ make auth-dev          # Auth service development
 make form-dev          # Form service development
 make analytics-dev     # Analytics service development
 ```
+
+## 🧪 **Quick API Testing**
+
+### **Authentication Flow**
+```bash
+# Register user
+curl -X POST http://localhost:8080/api/v1/auth/register \
+  -H "Content-Type: application/json" \
+  -d '{"email":"dev@example.com","username":"dev","password":"SecurePass123!","firstName":"Dev","lastName":"User"}'
+
+# Login and get token
+TOKEN=$(curl -X POST http://localhost:8080/api/v1/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"email":"dev@example.com","password":"SecurePass123!"}' | jq -r '.token')
+
+# Get user profile
+curl -X GET http://localhost:8080/api/v1/auth/profile \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+### **Form Management**
+```bash
+# Create form
+curl -X POST http://localhost:8080/api/v1/forms \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"title":"Test Form","description":"A test form","questions":[{"type":"text","title":"Your name?","required":true}]}'
+
+# List forms
+curl -X GET http://localhost:8080/api/v1/forms \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+> 📚 **For complete API documentation**: Visit http://localhost:8080/swagger/ after starting the services
 
           │
           ▼
@@ -197,6 +248,41 @@ This structure follows industry standards with clear separation of concerns:
 - **Tools**: Development automation and scripts
 - **Docs**: Comprehensive documentation
 - **Configs**: Environment configurations
+
+## 📚 **Documentation and Guides**
+
+### **🚀 Getting Started**
+- **[Tools Installation Guide](docs/development/TOOLS_INSTALLATION_GUIDE.md)** - Install all required development tools
+- **[Local Development Complete Guide](docs/development/LOCAL_DEVELOPMENT_COMPLETE_GUIDE.md)** - Complete setup, development, and testing guide
+- **[Developer Quick Reference](docs/development/DEVELOPER_QUICK_REFERENCE.md)** - Essential commands and endpoints
+- **[Contributing Guide](CONTRIBUTING.md)** - How to contribute to the project
+
+### **🏗️ Architecture and Design**
+- **[Architecture V2](docs/architecture/ARCHITECTURE_V2.md)** - Current system architecture
+- **[Implementation Guide](docs/development/IMPLEMENTATION_GUIDE.md)** - Detailed implementation notes
+- **[Enhanced Architecture](docs/architecture/enhanced/ARCHITECTURE_IMPLEMENTATION_COMPLETE.md)** - Production-ready architecture
+
+### **🔧 Development Workflows**
+- **[Local Development Tutorial](docs/development/TUTORIAL.md)** - Step-by-step development tutorial
+- **[API Testing Guide](docs/development/LOCAL_DEVELOPMENT_COMPLETE_GUIDE.md#-testing-and-api-usage)** - Complete API testing examples
+- **[Service Development](docs/development/LOCAL_DEVELOPMENT_COMPLETE_GUIDE.md#-development-workflows)** - Individual service development
+
+### **🚀 Deployment and Operations**
+- **[Deployment Guide](docs/deployment/DEPLOYMENT_GUIDE.md)** - Production deployment
+- **[CI/CD Implementation](docs/deployment/CI_CD_INFRASTRUCTURE_IMPLEMENTATION_GUIDE.md)** - Continuous integration setup
+- **[Observability Guide](docs/operations/OBSERVABILITY_COMPLETE.md)** - Monitoring and observability
+
+### **📖 Service-Specific Documentation**
+- **[Auth Service](apps/auth-service/README_CLEAN_ARCHITECTURE.md)** - Authentication and user management
+- **[Form Service](apps/form-service/README.md)** - Form creation and management
+- **[Response Service](apps/response-service/README.md)** - Form response handling
+- **[Analytics Service](apps/analytics-service/QUICK_START.md)** - Analytics and reporting
+- **[Realtime Service](apps/realtime-service/README_COMPLETE.md)** - Real-time collaboration
+
+### **🧪 Testing Resources**
+- **[API Documentation](http://localhost:8080/swagger/)** - Interactive API documentation (after starting services)
+- **[Testing Strategies](docs/development/LOCAL_DEVELOPMENT_COMPLETE_GUIDE.md#-testing-guidelines)** - Unit, integration, and E2E testing
+- **[Load Testing](docs/development/LOCAL_DEVELOPMENT_COMPLETE_GUIDE.md#performance-testing)** - Performance testing guides
 
 ## Services
 
