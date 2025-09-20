@@ -119,7 +119,7 @@ func NewClient(cfg *config.Config, logger *zap.Logger) (*Client, error) {
 	// Initialize admin client
 	if err := client.initAdmin(kafkaConfig); err != nil {
 		client.producer.Close()
-		client.consumer.Close(context.Background())
+		client.consumer.Close()
 		return nil, fmt.Errorf("failed to initialize admin client: %w", err)
 	}
 
@@ -166,8 +166,8 @@ func (c *Client) createKafkaConfig() (*sarama.Config, error) {
 	// Enable metadata refresh
 	kafkaConfig.Metadata.RefreshFrequency = 5 * time.Minute
 	kafkaConfig.Metadata.Full = true
-	kafkaConfig.Metadata.RetryMax = 3
-	kafkaConfig.Metadata.RetryBackoff = 250 * time.Millisecond
+	kafkaConfig.Metadata.Retry.Max = 3
+	kafkaConfig.Metadata.Retry.Backoff = 250 * time.Millisecond
 
 	return kafkaConfig, nil
 }
@@ -523,14 +523,14 @@ func (c *Client) ListTopics(ctx context.Context) ([]string, error) {
 		return nil, fmt.Errorf("kafka client is closed")
 	}
 
-	metadata, err := c.admin.DescribeTopics(nil)
+	topicsDetails, err := c.admin.ListTopics()
 	if err != nil {
-		return nil, fmt.Errorf("failed to describe topics: %w", err)
+		return nil, fmt.Errorf("failed to list topics: %w", err)
 	}
 
-	topics := make([]string, 0, len(metadata))
-	for topic := range metadata {
-		topics = append(topics, topic)
+	topics := make([]string, 0, len(topicsDetails))
+	for topicName := range topicsDetails {
+		topics = append(topics, topicName)
 	}
 
 	c.metrics.TopicsCount.Set(float64(len(topics)))
@@ -548,12 +548,18 @@ func (c *Client) GetTopicMetadata(ctx context.Context, topicName string) (*saram
 		return nil, fmt.Errorf("failed to describe topic %s: %w", topicName, err)
 	}
 
-	topicMetadata, exists := metadata[topicName]
-	if !exists {
+	if len(metadata) == 0 {
 		return nil, fmt.Errorf("topic %s not found", topicName)
 	}
 
-	return topicMetadata, nil
+	// Find the topic in the returned metadata slice
+	for _, topicMeta := range metadata {
+		if topicMeta.Name == topicName {
+			return topicMeta, nil
+		}
+	}
+
+	return nil, fmt.Errorf("topic %s not found", topicName)
 }
 
 // HealthCheck performs a health check on the Kafka client
