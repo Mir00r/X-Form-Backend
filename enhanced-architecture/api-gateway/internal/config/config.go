@@ -127,10 +127,11 @@ type WhitelistConfig struct {
 
 // RateLimitConfig holds rate limiting configuration
 type RateLimitConfig struct {
-	Enabled bool          `mapstructure:"enabled"`
-	RPS     int           `mapstructure:"rps" validate:"min=1"`
-	Burst   int           `mapstructure:"burst" validate:"min=1"`
-	Window  time.Duration `mapstructure:"window" validate:"required"`
+	Enabled  bool          `mapstructure:"enabled"`
+	RPS      int           `mapstructure:"rps" validate:"min=1"`
+	Burst    int           `mapstructure:"burst" validate:"min=1"`
+	Window   time.Duration `mapstructure:"window" validate:"required"`
+	RedisURL string        `mapstructure:"redis_url"`
 	// Per-endpoint rate limits
 	Endpoints map[string]EndpointRateLimit `mapstructure:"endpoints"`
 }
@@ -327,12 +328,22 @@ func validateConfig(cfg *Config) error {
 
 // CircuitBreakerConfig holds circuit breaker configuration
 type CircuitBreakerConfig struct {
-	Enabled          bool          `mapstructure:"enabled"`
-	Threshold        int           `mapstructure:"threshold" validate:"min=1"`
-	Timeout          time.Duration `mapstructure:"timeout" validate:"required"`
-	MaxRequests      int           `mapstructure:"max_requests" validate:"min=1"`
-	Interval         time.Duration `mapstructure:"interval" validate:"required"`
-	FailureThreshold float64       `mapstructure:"failure_threshold" validate:"min=0,max=1"`
+	Enabled               bool          `mapstructure:"enabled"`
+	Mode                  string        `mapstructure:"mode" validate:"oneof=service endpoint global"`
+	Threshold             int           `mapstructure:"threshold" validate:"min=1"`
+	Timeout               time.Duration `mapstructure:"timeout" validate:"required"`
+	MaxRequests           int           `mapstructure:"max_requests" validate:"min=1"`
+	Interval              time.Duration `mapstructure:"interval" validate:"required"`
+	FailureThreshold      float64       `mapstructure:"failure_threshold" validate:"min=0,max=1"`
+	MaxFailures           int           `mapstructure:"max_failures" validate:"min=1"`
+	MinRequests           int           `mapstructure:"min_requests" validate:"min=1"`
+	SuccessThreshold      int           `mapstructure:"success_threshold" validate:"min=1"`
+	HalfOpenMaxRequests   int           `mapstructure:"half_open_max_requests" validate:"min=1"`
+	WindowSize            int           `mapstructure:"window_size" validate:"min=1"`
+	RetryInterval         time.Duration `mapstructure:"retry_interval" validate:"required"`
+	ResponseTimeThreshold time.Duration `mapstructure:"response_time_threshold" validate:"required"`
+	HealthCheckURL        string        `mapstructure:"health_check_url"`
+	HealthCheckTimeout    time.Duration `mapstructure:"health_check_timeout"`
 }
 
 // ValidationConfig holds parameter validation configuration

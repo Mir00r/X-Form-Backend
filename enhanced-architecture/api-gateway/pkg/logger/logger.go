@@ -403,6 +403,110 @@ func (l *jsonLogger) Log(level LogLevel, msg string, fields ...Fields) {
 	l.log(level, msg, fieldsToUse)
 }
 
+// Enhanced logging utility functions for production use
+
+// CreateStructuredLogger creates a logger with production-ready configuration
+func CreateStructuredLogger(serviceName, serviceVersion string) Logger {
+	config := LogConfig{
+		Level:            "info",
+		Format:           "json",
+		Output:           "stdout",
+		IncludeCaller:    true,
+		IncludeTimestamp: true,
+		TimeFormat:       time.RFC3339Nano,
+		ServiceName:      serviceName,
+		ServiceVersion:   serviceVersion,
+	}
+	return New(config)
+}
+
+// LogWithTraceID logs a message with trace ID context
+func LogWithTraceID(logger Logger, level LogLevel, msg, traceID string) {
+	fields := Fields{"trace_id": traceID}
+	logger.Log(level, msg, fields)
+}
+
+// LogWithRequestContext logs with comprehensive request context
+func LogWithRequestContext(logger Logger, level LogLevel, msg string, method, path, clientIP, traceID string, duration time.Duration, statusCode int) {
+	fields := Fields{
+		"trace_id":    traceID,
+		"method":      method,
+		"path":        path,
+		"client_ip":   clientIP,
+		"duration_ms": duration.Milliseconds(),
+		"status_code": statusCode,
+		"timestamp":   time.Now().Format(time.RFC3339Nano),
+	}
+	logger.Log(level, msg, fields)
+}
+
+// LogAuditEvent logs audit events for security monitoring
+func LogAuditEvent(logger Logger, event, userID, resource string, additionalFields Fields) {
+	fields := Fields{
+		"audit_event":     event,
+		"audit_user_id":   userID,
+		"audit_resource":  resource,
+		"audit_timestamp": time.Now().Format(time.RFC3339Nano),
+		"event_type":      "audit",
+	}
+
+	// Merge additional fields
+	if additionalFields != nil {
+		for k, v := range additionalFields {
+			fields[k] = v
+		}
+	}
+
+	logger.Log(InfoLevel, fmt.Sprintf("AUDIT: %s", event), fields)
+}
+
+// LogPerformanceMetrics logs performance-related information
+func LogPerformanceMetrics(logger Logger, operation string, duration time.Duration, success bool, additionalMetrics Fields) {
+	fields := Fields{
+		"operation":   operation,
+		"duration_ms": duration.Milliseconds(),
+		"success":     success,
+		"metric_type": "performance",
+		"timestamp":   time.Now().Format(time.RFC3339Nano),
+	}
+
+	if additionalMetrics != nil {
+		for k, v := range additionalMetrics {
+			fields[k] = v
+		}
+	}
+
+	level := InfoLevel
+	if duration > 1*time.Second {
+		level = WarnLevel
+	}
+	if !success {
+		level = ErrorLevel
+	}
+
+	logger.Log(level, fmt.Sprintf("Performance: %s", operation), fields)
+}
+
+// LogBusinessEvent logs business-specific events
+func LogBusinessEvent(logger Logger, eventType, entity, action string, userID string, additionalData Fields) {
+	fields := Fields{
+		"business_event": eventType,
+		"entity":         entity,
+		"action":         action,
+		"user_id":        userID,
+		"event_type":     "business",
+		"timestamp":      time.Now().Format(time.RFC3339Nano),
+	}
+
+	if additionalData != nil {
+		for k, v := range additionalData {
+			fields[k] = v
+		}
+	}
+
+	logger.Log(InfoLevel, fmt.Sprintf("Business Event: %s %s", action, entity), fields)
+}
+
 // These methods are now implemented in the main Debug, Info, Warn, Error methods above
 
 // Config holds logger configuration

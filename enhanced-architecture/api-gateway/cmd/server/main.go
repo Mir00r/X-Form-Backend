@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
-	"strings"
 	"syscall"
 	"time"
 
@@ -159,6 +158,9 @@ func main() {
 // setupMiddlewareChain configures the comprehensive middleware chain
 // Implements the 7-step API Gateway process from the architecture diagram
 func setupMiddlewareChain(router *gin.Engine, cfg *config.Config, logger logger.Logger, metrics *metrics.Collector) {
+	// Initialize service registry for Step 5
+	serviceRegistry := middleware.NewServiceRegistry(logger, metrics)
+
 	// Step 1: Parameter Validation
 	router.Use(gin.Logger())
 	router.Use(gin.Recovery())
@@ -183,12 +185,12 @@ func setupMiddlewareChain(router *gin.Engine, cfg *config.Config, logger logger.
 
 		// Skip auth for health and docs endpoints
 		if r.URL.Path == "/health" || r.URL.Path == "/metrics" ||
-			strings.HasPrefix(r.URL.Path, "/swagger") {
+			r.URL.Path == "/swagger" || r.URL.Path == "/" {
 			c.Next()
 			return
 		}
 
-		// Apply authentication
+		// Apply authentication middleware - using existing Authentication function
 		authMiddleware := middleware.Authentication(cfg.Security.JWT)
 		authMiddleware(func(w http.ResponseWriter, r *http.Request) {
 			c.Next()
@@ -200,19 +202,39 @@ func setupMiddlewareChain(router *gin.Engine, cfg *config.Config, logger logger.
 		w := c.Writer
 		r := c.Request
 
-		// Apply rate limiting
+		// Apply rate limiting middleware
 		rateLimitMiddleware := middleware.RateLimit(cfg.Security.RateLimit)
 		rateLimitMiddleware(func(w http.ResponseWriter, r *http.Request) {
 			c.Next()
 		})(w, r)
 	})
 
-	// Step 5: Service Discovery (handled in handler)
-	// Step 6: Request Transformation (handled in handler)
-	// Step 7: Reverse Proxy (handled in handler)
+	// Step 5: Service Discovery
+	router.Use(func(c *gin.Context) {
+		w := c.Writer
+		r := c.Request
+
+		// Apply service discovery middleware
+		serviceDiscoveryMiddleware := middleware.ServiceDiscoveryMiddleware(serviceRegistry, logger, metrics)
+		serviceDiscoveryMiddleware(func(w http.ResponseWriter, r *http.Request) {
+			c.Next()
+		})(w, r)
+	})
+
+	// Additional middleware for enhanced functionality
+	router.Use(func(c *gin.Context) {
+		w := c.Writer
+		r := c.Request
+
+		// Apply CORS middleware
+		corsMiddleware := middleware.CORS(cfg.CORS)
+		corsMiddleware(func(w http.ResponseWriter, r *http.Request) {
+			c.Next()
+		})(w, r)
+	})
 }
 
-// setupRoutes configures all API Gateway routes
+// setupRoutes sets up all the routes for the API Gateway
 func setupRoutes(router *gin.Engine, h *handler.Handler, cfg *config.Config, logger logger.Logger, metrics *metrics.Collector) {
 	// Swagger documentation
 	router.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
