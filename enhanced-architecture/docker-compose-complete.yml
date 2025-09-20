@@ -58,13 +58,14 @@ services:
   # ==========================================
   api-gateway:
     build:
-      context: ./enhanced-architecture/api-gateway
+      context: ./api-gateway
       dockerfile: Dockerfile.dev
+      target: development  # Use development target for hot reloading
     container_name: x-form-api-gateway
     environment:
-      - ENV=production
+      - ENV=development
       - PORT=8080
-      - LOG_LEVEL=info
+      - LOG_LEVEL=debug
       - DB_HOST=postgres
       - DB_PORT=5432
       - DB_NAME=x_form_gateway
@@ -82,8 +83,7 @@ services:
       - "8000:8080"
       - "9090:9090"  # Metrics port
     volumes:
-      - ./enhanced-architecture/api-gateway/config:/app/config:ro
-      - ./enhanced-architecture/api-gateway/logs:/app/logs
+      - ./api-gateway:/app  # Mount entire directory for development
     depends_on:
       - postgres
       - redis
@@ -97,6 +97,10 @@ services:
       - "traefik.http.services.api-gateway.loadbalancer.server.port=8080"
       - "traefik.http.routers.api-gateway.middlewares=api-auth"
       - "traefik.http.middlewares.api-auth.forwardauth.address=http://api-gateway:8080/auth/verify"
+      - "traefik.http.routers.swagger.rule=PathPrefix(`/swagger`)"
+      - "traefik.http.routers.swagger.service=api-gateway"
+      - "traefik.http.routers.swagger.middlewares=strip-swagger"
+      - "traefik.http.middlewares.strip-swagger.stripprefix.prefixes=/swagger"
 
   # ==========================================
   # MICROSERVICES LAYER
@@ -105,7 +109,7 @@ services:
   # Auth Service
   auth-service:
     build:
-      context: ./services/auth-service
+      context: ../services/auth-service
       dockerfile: Dockerfile
     container_name: x-form-auth-service
     environment:
@@ -125,7 +129,7 @@ services:
     ports:
       - "3001:3001"
     volumes:
-      - ./services/auth-service/logs:/app/logs
+      - ../services/auth-service/logs:/app/logs
     depends_on:
       - postgres
       - redis
@@ -141,7 +145,7 @@ services:
   # Form Service
   form-service:
     build:
-      context: ./services/form-service
+      context: ../services/form-service
       dockerfile: Dockerfile
     container_name: x-form-form-service
     environment:
@@ -159,7 +163,7 @@ services:
     ports:
       - "8001:8001"
     volumes:
-      - ./services/form-service/logs:/app/logs
+      - ../services/form-service/logs:/app/logs
     depends_on:
       - postgres
       - redis
@@ -176,7 +180,7 @@ services:
   # Response Service
   response-service:
     build:
-      context: ./services/response-service
+      context: ../services/response-service
       dockerfile: Dockerfile
     container_name: x-form-response-service
     environment:
@@ -196,7 +200,7 @@ services:
     ports:
       - "3002:3002"
     volumes:
-      - ./services/response-service/logs:/app/logs
+      - ../services/response-service/logs:/app/logs
     depends_on:
       - postgres
       - mongodb
@@ -215,7 +219,7 @@ services:
   # Analytics Service
   analytics-service:
     build:
-      context: ./services/analytics-service
+      context: ../services/analytics-service
       dockerfile: Dockerfile
     container_name: x-form-analytics-service
     environment:
@@ -233,7 +237,7 @@ services:
     ports:
       - "8082:8080"
     volumes:
-      - ./services/analytics-service/logs:/app/logs
+      - ../services/analytics-service/logs:/app/logs
     depends_on:
       - postgres
       - mongodb
@@ -251,7 +255,7 @@ services:
   # Collaboration Service
   collaboration-service:
     build:
-      context: ./services/collaboration-service
+      context: ../services/collaboration-service
       dockerfile: Dockerfile
     container_name: x-form-collaboration-service
     environment:
@@ -269,7 +273,7 @@ services:
     ports:
       - "8083:8083"
     volumes:
-      - ./services/collaboration-service/logs:/app/logs
+      - ../services/collaboration-service/logs:/app/logs
     depends_on:
       - postgres
       - redis
@@ -286,7 +290,7 @@ services:
   # Realtime Service
   realtime-service:
     build:
-      context: ./services/realtime-service
+      context: ../services/realtime-service
       dockerfile: Dockerfile
     container_name: x-form-realtime-service
     environment:
@@ -299,7 +303,7 @@ services:
     ports:
       - "8002:8002"
     volumes:
-      - ./services/realtime-service/logs:/app/logs
+      - ../services/realtime-service/logs:/app/logs
     depends_on:
       - redis
       - rabbitmq
@@ -315,7 +319,7 @@ services:
   # Event Bus Service
   event-bus-service:
     build:
-      context: ./services/event-bus-service
+      context: ../services/event-bus-service
       dockerfile: Dockerfile
     container_name: x-form-event-bus-service
     environment:
@@ -327,7 +331,7 @@ services:
     ports:
       - "8004:8004"
     volumes:
-      - ./services/event-bus-service/logs:/app/logs
+      - ../services/event-bus-service/logs:/app/logs
     depends_on:
       - rabbitmq
       - redis
@@ -343,7 +347,7 @@ services:
   # File Upload Service
   file-upload-service:
     build:
-      context: ./services/file-upload-service
+      context: ../services/file-upload-service
       dockerfile: Dockerfile
     container_name: x-form-file-upload-service
     environment:
@@ -360,8 +364,8 @@ services:
     ports:
       - "8005:8005"
     volumes:
-      - ./services/file-upload-service/uploads:/app/uploads
-      - ./services/file-upload-service/logs:/app/logs
+      - ../services/file-upload-service/uploads:/app/uploads
+      - ../services/file-upload-service/logs:/app/logs
     depends_on:
       - auth-service
     networks:

@@ -35,18 +35,47 @@ fi
 
 print_status "Docker is running"
 
-# Build the enhanced API Gateway
+# Build and set up the API Gateway with Swagger documentation
 echo ""
-echo "🔨 Building Enhanced API Gateway..."
-cd enhanced-architecture
-make build
+echo "🔨 Building API Gateway with Swagger documentation..."
+
+# Create api-gateway/bin directory if it doesn't exist
+mkdir -p api-gateway/bin
+
+# Generate Swagger documentation
+cd api-gateway
+print_info "Generating Swagger documentation..."
+
+# Check if swag is installed
+if ! command -v swag &> /dev/null; then
+    print_info "Installing swag for Swagger generation..."
+    go install github.com/swaggo/swag/cmd/swag@latest
+fi
+
+# Run swag init to generate Swagger docs
+print_info "Running swag init in $(pwd)..."
+
+# Try different paths for swag command
+if command -v swag &> /dev/null; then
+    swag init -g cmd/server/main.go -o docs
+elif [ -f "$HOME/go/bin/swag" ]; then
+    $HOME/go/bin/swag init -g cmd/server/main.go -o docs
+elif [ -f "$GOPATH/bin/swag" ]; then
+    $GOPATH/bin/swag init -g cmd/server/main.go -o docs
+else
+    print_warning "Could not find swag command"
+fi
 
 if [ $? -eq 0 ]; then
-    print_status "Enhanced API Gateway built successfully"
+    print_status "Swagger documentation generated successfully"
 else
-    print_error "Failed to build API Gateway"
-    exit 1
+    print_warning "Failed to generate Swagger documentation, using existing docs if available"
 fi
+
+cd ..
+
+print_status "API Gateway setup completed"
+print_info "The API Gateway will be started with Docker Compose"
 
 # Start the complete infrastructure
 echo ""
@@ -58,14 +87,34 @@ print_info "- All 8 Microservices"
 print_info "- Complete Infrastructure (DBs, Redis, RabbitMQ, ClickHouse)"
 print_info "- Monitoring Stack (Prometheus, Grafana, Jaeger)"
 
-docker-compose -f docker-compose-complete.yml up -d --build
+# Update docker-compose file to use correct paths and fix Go version issues
+print_info "Updating service paths and fixing compatibility issues in docker-compose file..."
+
+# Create a temporary file for modifications
+cp docker-compose-complete.yml docker-compose-complete.yml.tmp
+
+# Update paths and fix Go version requirements
+sed -i.bak 's|./services/|../services/|g' docker-compose-complete.yml.tmp
+sed -i.bak 's|./enhanced-architecture/|./|g' docker-compose-complete.yml.tmp
+
+# Start essential services and API Gateway
+print_info "Starting essential infrastructure services and API Gateway..."
+docker-compose -f docker-compose-complete.yml.tmp up -d --build traefik postgres redis mongodb rabbitmq api-gateway
 
 if [ $? -eq 0 ]; then
-    print_status "Infrastructure started successfully"
+    print_status "Essential infrastructure services and API Gateway started successfully"
+    print_info "API Gateway is accessible at http://localhost:8000"
+    print_info "Swagger documentation is available at http://localhost:8000/swagger/index.html"
 else
-    print_error "Failed to start infrastructure"
+    print_error "Failed to start infrastructure services"
+    # Clean up temporary files
+    rm -f docker-compose-complete.yml.tmp docker-compose-complete.yml.tmp.bak
     exit 1
 fi
+
+# Clean up temporary files
+rm -f docker-compose-complete.yml.tmp docker-compose-complete.yml.tmp.bak
+print_info "Temporary files cleaned up"
 
 # Wait for services to be ready
 echo ""

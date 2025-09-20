@@ -13,6 +13,36 @@ import (
 	"time"
 )
 
+// LogConfig holds logger configuration
+type LogConfig struct {
+	// Level is the minimum log level to output
+	Level string `mapstructure:"level" validate:"required,oneof=debug info warn error fatal"`
+
+	// Format is the log output format
+	Format string `mapstructure:"format" validate:"required,oneof=json text pretty"`
+
+	// Output is the log output destination
+	Output string `mapstructure:"output" validate:"required,oneof=stdout stderr file"`
+
+	// FilePath is the path to the log file (if Output is "file")
+	FilePath string `mapstructure:"file_path"`
+
+	// IncludeCaller controls whether to include caller information
+	IncludeCaller bool `mapstructure:"include_caller"`
+
+	// IncludeTimestamp controls whether to include timestamp
+	IncludeTimestamp bool `mapstructure:"include_timestamp"`
+
+	// TimeFormat is the format for timestamps
+	TimeFormat string `mapstructure:"time_format"`
+
+	// ServiceName is the name of the service
+	ServiceName string `mapstructure:"service_name"`
+
+	// ServiceVersion is the version of the service
+	ServiceVersion string `mapstructure:"service_version"`
+}
+
 // LogLevel represents the severity level of a log entry
 type LogLevel int
 
@@ -98,15 +128,282 @@ type Logger interface {
 	// Structured logging methods
 	WithField(key string, value interface{}) Logger
 	WithFields(fields Fields) Logger
+
+	// Error handling
 	WithError(err error) Logger
 
-	// Generic log method
-	Log(level string, msg string)
+	// Close closes the logger
+	Close() error
 
 	// Configuration methods
 	SetLevel(level LogLevel)
 	SetOutput(output io.Writer)
+
+	// Structured logging - use a single method signature
+	Log(level LogLevel, msg string, fields ...Fields)
 }
+
+// jsonLogger implements the Logger interface with JSON formatting
+type jsonLogger struct {
+	level          LogLevel
+	output         io.Writer
+	fields         Fields
+	includeCaller  bool
+	serviceName    string
+	serviceVersion string
+}
+
+// New creates a new logger instance
+func New(config LogConfig) Logger {
+	// Parse log level
+	level := ParseLogLevel(config.Level)
+
+	// Set output writer
+	var output io.Writer
+	switch strings.ToLower(config.Output) {
+	case "stdout":
+		output = os.Stdout
+	case "stderr":
+		output = os.Stderr
+	case "file":
+		if config.FilePath == "" {
+			log.Println("Warning: file output specified but no file path provided, defaulting to stdout")
+			output = os.Stdout
+		} else {
+			file, err := os.OpenFile(config.FilePath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
+			if err != nil {
+				log.Printf("Error opening log file: %v, defaulting to stdout", err)
+				output = os.Stdout
+			} else {
+				output = file
+			}
+		}
+	default:
+		output = os.Stdout
+	}
+
+	// Create logger based on format
+	switch strings.ToLower(config.Format) {
+	case "json":
+		return &jsonLogger{
+			level:          level,
+			output:         output,
+			fields:         make(Fields),
+			includeCaller:  config.IncludeCaller,
+			serviceName:    config.ServiceName,
+			serviceVersion: config.ServiceVersion,
+		}
+	case "text", "pretty":
+		// For simplicity, we'll just use JSON logger for now
+		// In a real implementation, you would create separate loggers for different formats
+		return &jsonLogger{
+			level:          level,
+			output:         output,
+			fields:         make(Fields),
+			includeCaller:  config.IncludeCaller,
+			serviceName:    config.ServiceName,
+			serviceVersion: config.ServiceVersion,
+		}
+	default:
+		return &jsonLogger{
+			level:          level,
+			output:         output,
+			fields:         make(Fields),
+			includeCaller:  config.IncludeCaller,
+			serviceName:    config.ServiceName,
+			serviceVersion: config.ServiceVersion,
+		}
+	}
+}
+
+// log logs a message at the specified level
+func (l *jsonLogger) log(level LogLevel, msg string, fields Fields) {
+	if level < l.level {
+		return
+	}
+
+	// Create log entry
+	entry := LogEntry{
+		Timestamp: time.Now(),
+		Level:     level.String(),
+		Message:   msg,
+		Service:   l.serviceName,
+		Version:   l.serviceVersion,
+	}
+
+	// Add caller information if enabled
+	if l.includeCaller {
+		_, file, line, ok := runtime.Caller(2)
+		if ok {
+			entry.Caller = fmt.Sprintf("%s:%d", file, line)
+		}
+	}
+
+	// Merge fields
+	if len(l.fields) > 0 || len(fields) > 0 {
+		entry.Fields = make(Fields)
+		// Add logger fields
+		for k, v := range l.fields {
+			entry.Fields[k] = v
+		}
+		// Add message fields (overrides logger fields)
+		for k, v := range fields {
+			entry.Fields[k] = v
+		}
+	}
+
+	// Marshal to JSON
+	data, err := json.Marshal(entry)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error marshaling log entry: %v\n", err)
+		return
+	}
+
+	// Write to output
+	data = append(data, '\n')
+	_, err = l.output.Write(data)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error writing log entry: %v\n", err)
+	}
+
+	// If fatal, exit
+	if level == FatalLevel {
+		os.Exit(1)
+	}
+}
+
+// Debug logs a debug message
+func (l *jsonLogger) Debug(msg string) {
+	l.log(DebugLevel, msg, nil)
+}
+
+// Info logs an info message
+func (l *jsonLogger) Info(msg string) {
+	l.log(InfoLevel, msg, nil)
+}
+
+// Warn logs a warning message
+func (l *jsonLogger) Warn(msg string) {
+	l.log(WarnLevel, msg, nil)
+}
+
+// Error logs an error message
+func (l *jsonLogger) Error(msg string) {
+	l.log(ErrorLevel, msg, nil)
+}
+
+// Fatal logs a fatal message and exits
+func (l *jsonLogger) Fatal(msg string) {
+	l.log(FatalLevel, msg, nil)
+}
+
+// Debugf logs a formatted debug message
+func (l *jsonLogger) Debugf(format string, args ...interface{}) {
+	l.log(DebugLevel, fmt.Sprintf(format, args...), nil)
+}
+
+// Infof logs a formatted info message
+func (l *jsonLogger) Infof(format string, args ...interface{}) {
+	l.log(InfoLevel, fmt.Sprintf(format, args...), nil)
+}
+
+// Warnf logs a formatted warning message
+func (l *jsonLogger) Warnf(format string, args ...interface{}) {
+	l.log(WarnLevel, fmt.Sprintf(format, args...), nil)
+}
+
+// Errorf logs a formatted error message
+func (l *jsonLogger) Errorf(format string, args ...interface{}) {
+	l.log(ErrorLevel, fmt.Sprintf(format, args...), nil)
+}
+
+// Fatalf logs a formatted fatal message and exits
+func (l *jsonLogger) Fatalf(format string, args ...interface{}) {
+	l.log(FatalLevel, fmt.Sprintf(format, args...), nil)
+}
+
+// WithField returns a new logger with the field added
+func (l *jsonLogger) WithField(key string, value interface{}) Logger {
+	newLogger := &jsonLogger{
+		level:          l.level,
+		output:         l.output,
+		fields:         make(Fields),
+		includeCaller:  l.includeCaller,
+		serviceName:    l.serviceName,
+		serviceVersion: l.serviceVersion,
+	}
+
+	// Copy existing fields
+	for k, v := range l.fields {
+		newLogger.fields[k] = v
+	}
+
+	// Add new field
+	newLogger.fields[key] = value
+
+	return newLogger
+}
+
+// WithFields returns a new logger with the fields added
+func (l *jsonLogger) WithFields(fields Fields) Logger {
+	newLogger := &jsonLogger{
+		level:          l.level,
+		output:         l.output,
+		fields:         make(Fields),
+		includeCaller:  l.includeCaller,
+		serviceName:    l.serviceName,
+		serviceVersion: l.serviceVersion,
+	}
+
+	// Copy existing fields
+	for k, v := range l.fields {
+		newLogger.fields[k] = v
+	}
+
+	// Add new fields
+	for k, v := range fields {
+		newLogger.fields[k] = v
+	}
+
+	return newLogger
+}
+
+// WithError returns a new logger with the error added
+func (l *jsonLogger) WithError(err error) Logger {
+	return l.WithField("error", err.Error())
+}
+
+// Close closes the logger
+func (l *jsonLogger) Close() error {
+	// Close file if output is a file
+	if closer, ok := l.output.(io.Closer); ok {
+		return closer.Close()
+	}
+	return nil
+}
+
+// Implementation of additional Logger methods
+
+// SetLevel sets the logger level
+func (l *jsonLogger) SetLevel(level LogLevel) {
+	l.level = level
+}
+
+// SetOutput sets the logger output
+func (l *jsonLogger) SetOutput(output io.Writer) {
+	l.output = output
+}
+
+// Log logs a message with the specified level
+func (l *jsonLogger) Log(level LogLevel, msg string, fields ...Fields) {
+	var fieldsToUse Fields
+	if len(fields) > 0 {
+		fieldsToUse = fields[0]
+	}
+	l.log(level, msg, fieldsToUse)
+}
+
+// These methods are now implemented in the main Debug, Info, Warn, Error methods above
 
 // Config holds logger configuration
 type Config struct {
@@ -252,9 +549,13 @@ func (l *StructuredLogger) WithError(err error) Logger {
 }
 
 // Log logs a message with specified level
-func (l *StructuredLogger) Log(level string, msg string) {
-	logLevel := ParseLogLevel(level)
-	l.log(logLevel, msg)
+func (l *StructuredLogger) Log(level LogLevel, msg string, fields ...Fields) {
+	l.log(level, msg)
+}
+
+// Close closes the logger (no-op for StructuredLogger)
+func (l *StructuredLogger) Close() error {
+	return nil
 }
 
 // SetLevel sets the minimum log level
@@ -592,11 +893,15 @@ func (s *SimpleLogger) WithError(err error) Logger {
 }
 
 // Log logs a message with specified level
-func (s *SimpleLogger) Log(level string, msg string) {
-	logLevel := ParseLogLevel(level)
-	if s.level <= logLevel {
-		s.write(strings.ToUpper(level), msg)
+func (s *SimpleLogger) Log(level LogLevel, msg string, fields ...Fields) {
+	if s.level <= level {
+		s.write(strings.ToUpper(level.String()), msg)
 	}
+}
+
+// Close closes the logger (no-op for SimpleLogger)
+func (s *SimpleLogger) Close() error {
+	return nil
 }
 
 // SetLevel sets the minimum log level

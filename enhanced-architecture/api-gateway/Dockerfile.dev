@@ -17,7 +17,7 @@ RUN apk add --no-cache \
 WORKDIR /app
 
 # Install air for hot reloading (development)
-RUN go install github.com/cosmtrek/air@latest
+RUN go install github.com/cosmtrek/air@v1.44.0
 
 # Copy go mod files
 COPY go.mod go.sum ./
@@ -38,7 +38,7 @@ FROM base AS development
 EXPOSE 8080
 
 # Install debugging tools
-RUN go install github.com/go-delve/delve/cmd/dlv@latest
+RUN go install github.com/go-delve/delve/cmd/dlv@v1.21.0
 
 # Create air configuration
 COPY .air.toml .

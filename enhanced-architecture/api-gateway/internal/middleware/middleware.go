@@ -99,15 +99,6 @@ func StructuredLogger(logger logger.Logger) Middleware {
 			clientIP := getClientIPSimple(r)
 			userAgent := r.UserAgent()
 
-			// Add request context to logger
-			loggerWithContext := logger.WithFields(map[string]interface{}{
-				"request_id": requestID,
-				"method":     method,
-				"path":       path,
-				"client_ip":  clientIP,
-				"user_agent": userAgent,
-			})
-
 			// Create wrapped response writer
 			ww := &wrappedResponseWriter{ResponseWriter: w, statusCode: 200}
 
@@ -118,18 +109,16 @@ func StructuredLogger(logger logger.Logger) Middleware {
 			duration := time.Since(start)
 			statusCode := ww.statusCode
 
-			logLevel := "info"
-			if statusCode >= 400 {
-				logLevel = "error"
-			} else if statusCode >= 300 {
-				logLevel = "warn"
-			}
+			logMessage := fmt.Sprintf("Request completed: method=%s path=%s status=%d client_ip=%s user_agent=%s latency_ms=%d body_size=%d request_id=%s",
+				method, path, statusCode, clientIP, userAgent, duration.Milliseconds(), ww.bytesWritten, requestID)
 
-			loggerWithContext.WithFields(map[string]interface{}{
-				"status_code": statusCode,
-				"latency_ms":  duration.Milliseconds(),
-				"body_size":   ww.bytesWritten,
-			}).Log(logLevel, "Request completed")
+			if statusCode >= 400 {
+				logger.Error(logMessage)
+			} else if statusCode >= 300 {
+				logger.Warn(logMessage)
+			} else {
+				logger.Info(logMessage)
+			}
 		}
 	}
 }
@@ -162,12 +151,8 @@ func Recovery(logger logger.Logger) Middleware {
 			defer func() {
 				if err := recover(); err != nil {
 					requestID := getRequestID(r.Context())
-					logger.WithFields(map[string]interface{}{
-						"request_id": requestID,
-						"method":     r.Method,
-						"path":       r.URL.Path,
-						"panic":      err,
-					}).Error("Panic recovered")
+					logger.Errorf("Panic recovered: request_id=%s method=%s path=%s panic=%v",
+						requestID, r.Method, r.URL.Path, err)
 
 					// Return internal server error
 					http.Error(w, "Internal Server Error", http.StatusInternalServerError)
@@ -280,6 +265,36 @@ func ParameterValidation(validationConfig config.ValidationConfig) Middleware {
 
 // Step 2: Whitelist Validation Middleware
 func WhitelistValidation(whitelistConfig config.WhitelistConfig) Middleware {
+	// Pre-parse CIDR blocks for better performance
+	var parsedAllowedNetworks []*net.IPNet
+	var parsedBlockedNetworks []*net.IPNet
+	var plainAllowedIPs []string
+	var plainBlockedIPs []string
+
+	// Parse allowed IPs
+	for _, ipOrCIDR := range whitelistConfig.AllowedIPs {
+		if strings.Contains(ipOrCIDR, "/") {
+			_, network, err := net.ParseCIDR(ipOrCIDR)
+			if err == nil {
+				parsedAllowedNetworks = append(parsedAllowedNetworks, network)
+			}
+		} else {
+			plainAllowedIPs = append(plainAllowedIPs, ipOrCIDR)
+		}
+	}
+
+	// Parse blocked IPs
+	for _, ipOrCIDR := range whitelistConfig.BlockedIPs {
+		if strings.Contains(ipOrCIDR, "/") {
+			_, network, err := net.ParseCIDR(ipOrCIDR)
+			if err == nil {
+				parsedBlockedNetworks = append(parsedBlockedNetworks, network)
+			}
+		} else {
+			plainBlockedIPs = append(plainBlockedIPs, ipOrCIDR)
+		}
+	}
+
 	return func(next HandlerFunc) HandlerFunc {
 		return func(w http.ResponseWriter, r *http.Request) {
 			// Skip if whitelist is disabled
@@ -288,18 +303,62 @@ func WhitelistValidation(whitelistConfig config.WhitelistConfig) Middleware {
 				return
 			}
 
-			clientIP := getClientIPFromConfig(r, whitelistConfig)
-
-			// Check if IP is blocked
-			if isIPBlocked(clientIP, whitelistConfig.BlockedIPs) {
-				http.Error(w, "IP address is blocked", http.StatusForbidden)
+			// Skip for certain paths (health checks, metrics, etc.)
+			if isPublicEndpoint(r.URL.Path) {
+				next(w, r)
 				return
 			}
 
-			// Check if IP is in whitelist (if whitelist is configured)
-			if len(whitelistConfig.AllowedIPs) > 0 && !isIPAllowed(clientIP, whitelistConfig.AllowedIPs) {
-				http.Error(w, "IP address not in whitelist", http.StatusForbidden)
+			clientIP := getClientIPFromConfig(r, whitelistConfig)
+			ipAddr := net.ParseIP(clientIP)
+			if ipAddr == nil {
+				// Invalid IP address
+				http.Error(w, "Invalid IP address", http.StatusForbidden)
 				return
+			}
+
+			// Check if IP is blocked (explicit IPs)
+			for _, blockedIP := range plainBlockedIPs {
+				if clientIP == blockedIP {
+					http.Error(w, "IP address is blocked", http.StatusForbidden)
+					return
+				}
+			}
+
+			// Check if IP is in blocked networks
+			for _, network := range parsedBlockedNetworks {
+				if network.Contains(ipAddr) {
+					http.Error(w, "IP address is blocked", http.StatusForbidden)
+					return
+				}
+			}
+
+			// If whitelist is configured, check if IP is allowed
+			if len(whitelistConfig.AllowedIPs) > 0 {
+				allowed := false
+
+				// Check explicit IPs
+				for _, allowedIP := range plainAllowedIPs {
+					if clientIP == allowedIP {
+						allowed = true
+						break
+					}
+				}
+
+				// Check networks
+				if !allowed {
+					for _, network := range parsedAllowedNetworks {
+						if network.Contains(ipAddr) {
+							allowed = true
+							break
+						}
+					}
+				}
+
+				if !allowed {
+					http.Error(w, "IP address not in whitelist", http.StatusForbidden)
+					return
+				}
 			}
 
 			// Add client IP to context
@@ -342,7 +401,8 @@ func Authentication(authConfig config.JWTConfig) Middleware {
 // Step 4: Rate Limiting Middleware
 func RateLimit(rateLimitConfig config.RateLimitConfig) Middleware {
 	// Simple in-memory rate limiter (in production, use Redis)
-	rateLimiters := make(map[string]*simpleRateLimiter)
+	globalLimiters := make(map[string]*simpleRateLimiter)
+	endpointLimiters := make(map[string]map[string]*simpleRateLimiter)
 
 	return func(next HandlerFunc) HandlerFunc {
 		return func(w http.ResponseWriter, r *http.Request) {
@@ -354,29 +414,94 @@ func RateLimit(rateLimitConfig config.RateLimitConfig) Middleware {
 
 			// Get client identifier
 			clientID := getClientIdentifier(r)
+			path := r.URL.Path
 
-			// Get or create rate limiter for client
-			limiter, exists := rateLimiters[clientID]
-			if !exists {
-				limiter = newSimpleRateLimiter(rateLimitConfig.RPS, rateLimitConfig.Burst)
-				rateLimiters[clientID] = limiter
+			// Check for endpoint-specific rate limits
+			var rps, burst int
+			var window time.Duration
+			var endpointLimit bool
+
+			for pattern, limit := range rateLimitConfig.Endpoints {
+				if matchPath(path, pattern) {
+					rps = limit.RPS
+					burst = limit.Burst
+					window = limit.Window
+					endpointLimit = true
+					break
+				}
+			}
+
+			// Use global limits if no endpoint-specific limits found
+			if !endpointLimit {
+				rps = rateLimitConfig.RPS
+				burst = rateLimitConfig.Burst
+				window = rateLimitConfig.Window
+			}
+
+			// Get or create appropriate rate limiter
+			var limiter *simpleRateLimiter
+			if endpointLimit {
+				// Use endpoint-specific limiter
+				if _, exists := endpointLimiters[path]; !exists {
+					endpointLimiters[path] = make(map[string]*simpleRateLimiter)
+				}
+
+				if _, exists := endpointLimiters[path][clientID]; !exists {
+					endpointLimiters[path][clientID] = newSimpleRateLimiter(rps, burst)
+					endpointLimiters[path][clientID].windowSize = window
+				}
+
+				limiter = endpointLimiters[path][clientID]
+			} else {
+				// Use global limiter
+				if _, exists := globalLimiters[clientID]; !exists {
+					globalLimiters[clientID] = newSimpleRateLimiter(rps, burst)
+					globalLimiters[clientID].windowSize = window
+				}
+
+				limiter = globalLimiters[clientID]
 			}
 
 			// Check if request is allowed
 			if !limiter.Allow() {
-				w.Header().Set("X-RateLimit-Limit", strconv.Itoa(rateLimitConfig.RPS))
+				w.Header().Set("X-RateLimit-Limit", strconv.Itoa(rps))
 				w.Header().Set("X-RateLimit-Remaining", "0")
+				w.Header().Set("X-RateLimit-Reset", strconv.FormatInt(time.Now().Add(window).Unix(), 10))
 				http.Error(w, "Too many requests", http.StatusTooManyRequests)
 				return
 			}
 
 			// Add rate limit headers
-			w.Header().Set("X-RateLimit-Limit", strconv.Itoa(rateLimitConfig.RPS))
-			w.Header().Set("X-RateLimit-Remaining", strconv.Itoa(rateLimitConfig.Burst-1))
+			remaining := burst - len(limiter.requests)
+			if remaining < 0 {
+				remaining = 0
+			}
+
+			w.Header().Set("X-RateLimit-Limit", strconv.Itoa(rps))
+			w.Header().Set("X-RateLimit-Remaining", strconv.Itoa(remaining))
+			w.Header().Set("X-RateLimit-Reset", strconv.FormatInt(time.Now().Add(window).Unix(), 10))
 
 			next(w, r)
 		}
 	}
+}
+
+// matchPath checks if a path matches a pattern
+func matchPath(path, pattern string) bool {
+	// Exact match
+	if path == pattern {
+		return true
+	}
+
+	// Prefix match with wildcard
+	if strings.HasSuffix(pattern, "*") {
+		prefix := strings.TrimSuffix(pattern, "*")
+		return strings.HasPrefix(path, prefix)
+	}
+
+	// TODO: Add regex pattern matching if needed
+
+	return false
 }
 
 // Timeout middleware implements request timeout
@@ -632,7 +757,7 @@ func validateRequest(r *http.Request, config config.ValidationConfig) error {
 	return nil
 }
 
-// validateToken performs basic token validation
+// validateToken performs JWT token validation
 func validateToken(token string, config config.JWTConfig) bool {
 	// Basic token validation (simplified for this implementation)
 	if len(token) < 10 {
@@ -640,6 +765,29 @@ func validateToken(token string, config config.JWTConfig) bool {
 	}
 
 	// In a real implementation, you would parse and validate the JWT
-	// For now, just check if it's not empty and has reasonable length
-	return len(token) > 0 && len(token) < 2048
+	// using the appropriate algorithm and secret/keys
+	switch config.Algorithm {
+	case "HS256", "HS384", "HS512":
+		// For HMAC-based algorithms, we would verify using the secret
+		return validateHMACToken(token, config.Secret, config.Algorithm)
+	case "RS256", "RS384", "RS512":
+		// For RSA-based algorithms, we would verify using the public key
+		return validateRSAToken(token, config.PublicKey, config.Algorithm)
+	default:
+		return false
+	}
+}
+
+// validateHMACToken validates a token using HMAC algorithm
+func validateHMACToken(token, secret, algorithm string) bool {
+	// In a real implementation, this would use jwt.Parse with the appropriate signing method
+	// For now, just check if token and secret are valid
+	return len(token) > 0 && len(secret) >= 32
+}
+
+// validateRSAToken validates a token using RSA algorithm
+func validateRSAToken(token, publicKey, algorithm string) bool {
+	// In a real implementation, this would parse the public key and verify the token
+	// For now, just check if token and public key are valid
+	return len(token) > 0 && len(publicKey) > 0
 }

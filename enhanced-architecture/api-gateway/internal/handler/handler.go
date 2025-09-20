@@ -87,7 +87,7 @@ func (h *Handler) initializeServices() {
 	services := map[string]*Service{
 		"auth-service": {
 			Name:            "auth-service",
-			BaseURL:         "http://auth-service:8081",
+			BaseURL:         "http://localhost:8001",
 			HealthCheckPath: "/health",
 			Timeout:         time.Second * 30,
 			Headers:         map[string]string{"Service": "auth-service"},
@@ -100,12 +100,12 @@ func (h *Handler) initializeServices() {
 			},
 			LoadBalancer: &LoadBalancer{
 				Strategy:  "round_robin",
-				Instances: []string{"http://auth-service:8081"},
+				Instances: []string{"http://localhost:8001"},
 			},
 		},
 		"form-service": {
 			Name:            "form-service",
-			BaseURL:         "http://form-service:8082",
+			BaseURL:         "http://localhost:8002",
 			HealthCheckPath: "/health",
 			Timeout:         time.Second * 30,
 			Headers:         map[string]string{"Service": "form-service"},
@@ -118,12 +118,12 @@ func (h *Handler) initializeServices() {
 			},
 			LoadBalancer: &LoadBalancer{
 				Strategy:  "round_robin",
-				Instances: []string{"http://form-service:8082"},
+				Instances: []string{"http://localhost:8002"},
 			},
 		},
 		"response-service": {
 			Name:            "response-service",
-			BaseURL:         "http://response-service:8083",
+			BaseURL:         "http://localhost:8003",
 			HealthCheckPath: "/health",
 			Timeout:         time.Second * 30,
 			Headers:         map[string]string{"Service": "response-service"},
@@ -136,12 +136,12 @@ func (h *Handler) initializeServices() {
 			},
 			LoadBalancer: &LoadBalancer{
 				Strategy:  "round_robin",
-				Instances: []string{"http://response-service:8083"},
+				Instances: []string{"http://localhost:8003"},
 			},
 		},
 		"collaboration-service": {
 			Name:            "collaboration-service",
-			BaseURL:         "http://collaboration-service:8084",
+			BaseURL:         "http://localhost:8004",
 			HealthCheckPath: "/health",
 			Timeout:         time.Second * 30,
 			Headers:         map[string]string{"Service": "collaboration-service"},
@@ -154,12 +154,12 @@ func (h *Handler) initializeServices() {
 			},
 			LoadBalancer: &LoadBalancer{
 				Strategy:  "round_robin",
-				Instances: []string{"http://collaboration-service:8084"},
+				Instances: []string{"http://localhost:8004"},
 			},
 		},
 		"realtime-service": {
 			Name:            "realtime-service",
-			BaseURL:         "http://realtime-service:8085",
+			BaseURL:         "http://localhost:8005",
 			HealthCheckPath: "/health",
 			Timeout:         time.Second * 30,
 			Headers:         map[string]string{"Service": "realtime-service"},
@@ -172,12 +172,12 @@ func (h *Handler) initializeServices() {
 			},
 			LoadBalancer: &LoadBalancer{
 				Strategy:  "round_robin",
-				Instances: []string{"http://realtime-service:8085"},
+				Instances: []string{"http://localhost:8005"},
 			},
 		},
 		"analytics-service": {
 			Name:            "analytics-service",
-			BaseURL:         "http://analytics-service:8086",
+			BaseURL:         "http://localhost:8006",
 			HealthCheckPath: "/health",
 			Timeout:         time.Second * 30,
 			Headers:         map[string]string{"Service": "analytics-service"},
@@ -190,7 +190,7 @@ func (h *Handler) initializeServices() {
 			},
 			LoadBalancer: &LoadBalancer{
 				Strategy:  "round_robin",
-				Instances: []string{"http://analytics-service:8086"},
+				Instances: []string{"http://localhost:8006"},
 			},
 		},
 	}
@@ -697,6 +697,11 @@ func (gh *GatewayHandlers) ProxyRequest(w http.ResponseWriter, r *http.Request) 
 	gh.handler.ProxyHandler(w, r)
 }
 
+// ProxyToService proxies a request to a specific service by name
+func (gh *GatewayHandlers) ProxyToService(w http.ResponseWriter, r *http.Request, serviceName string) {
+	gh.handler.ProxyToService(w, r, serviceName)
+}
+
 // HealthCheck handles health check requests
 func (gh *GatewayHandlers) HealthCheck(w http.ResponseWriter, r *http.Request) {
 	gh.handler.HealthHandler(w, r)
@@ -710,6 +715,52 @@ func (gh *GatewayHandlers) Metrics(w http.ResponseWriter, r *http.Request) {
 // WebSocket handles WebSocket requests
 func (gh *GatewayHandlers) WebSocket(w http.ResponseWriter, r *http.Request) {
 	gh.handler.WebSocketHandler(w, r)
+}
+
+// ProxyToService proxies a request to a specific service by name
+func (h *Handler) ProxyToService(w http.ResponseWriter, r *http.Request, serviceName string) {
+	service, exists := h.services[serviceName]
+	if !exists {
+		h.handleServiceNotFound(w, r, serviceName)
+		return
+	}
+
+	// Check circuit breaker
+	if service.CircuitBreaker != nil && service.CircuitBreaker.Enabled {
+		if !h.checkCircuitBreaker(service.CircuitBreaker) {
+			h.handleCircuitOpen(w, r, serviceName)
+			return
+		}
+	}
+
+	// Get the appropriate proxy
+	proxy, exists := h.proxies[serviceName]
+	if !exists {
+		h.handleServiceNotFound(w, r, serviceName)
+		return
+	}
+
+	// Record start time for metrics
+	start := time.Now()
+
+	// Add timeout to request context
+	ctx, cancel := context.WithTimeout(r.Context(), service.Timeout)
+	defer cancel()
+	r = r.WithContext(ctx)
+
+	// Add service-specific headers
+	h.transformRequest(r, service)
+
+	// Forward the request
+	proxy.ServeHTTP(w, r)
+
+	// Record success if the request was successful
+	if service.CircuitBreaker != nil && service.CircuitBreaker.Enabled {
+		h.recordSuccess(service.CircuitBreaker)
+	}
+
+	// Record metrics (duration calculation is simplified here)
+	h.metrics.RecordUpstreamRequest(serviceName, r.Method, 200, time.Since(start))
 }
 
 // SetupRoutes sets up the HTTP routes for the gateway
