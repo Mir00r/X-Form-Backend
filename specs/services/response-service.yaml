@@ -1,0 +1,908 @@
+openapi: 3.0.3
+info:
+  title: X-Form Response Service API
+  description: |
+    Form response collection and management service for X-Form Backend providing
+    response submission, data processing, analytics integration, and export capabilities.
+    
+    ## Features
+    - Response submission and validation
+    - Data storage and retrieval
+    - Analytics integration
+    - Export capabilities
+    - Real-time notifications
+    - Data transformation
+    
+  version: 1.0.0
+  contact:
+    name: X-Form Team
+    email: support@x-form.com
+    url: https://docs.x-form.com
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+
+servers:
+  - url: http://localhost:3002
+    description: Development server
+  - url: https://responses.x-form.com
+    description: Production server
+  - url: https://staging-responses.x-form.com
+    description: Staging server
+
+paths:
+  # Response Submission
+  /responses:
+    post:
+      summary: Submit form response
+      description: Submit a new response to a form
+      tags: [Response Submission]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ResponseSubmission'
+            examples:
+              contact_form:
+                value:
+                  formId: "form_123"
+                  data:
+                    name: "John Doe"
+                    email: "john@example.com"
+                    message: "Hello from the contact form"
+                  metadata:
+                    userAgent: "Mozilla/5.0..."
+                    ipAddress: "192.168.1.1"
+                    timestamp: "2024-01-15T10:30:00Z"
+      responses:
+        '201':
+          description: Response submitted successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Response'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+    get:
+      summary: List responses
+      description: Retrieve responses with filtering and pagination
+      tags: [Response Management]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: formId
+          in: query
+          schema:
+            type: string
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [pending, processed, validated, rejected]
+        - name: from
+          in: query
+          schema:
+            type: string
+            format: date-time
+        - name: to
+          in: query
+          schema:
+            type: string
+            format: date-time
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+            maximum: 1000
+      responses:
+        '200':
+          description: List of responses
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  responses:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Response'
+                  pagination:
+                    $ref: '#/components/schemas/Pagination'
+
+  /responses/{responseId}:
+    get:
+      summary: Get response details
+      description: Retrieve detailed information about a specific response
+      tags: [Response Management]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/ResponseId'
+      responses:
+        '200':
+          description: Response details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseDetails'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    put:
+      summary: Update response
+      description: Update response data or status
+      tags: [Response Management]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/ResponseId'
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                data:
+                  type: object
+                status:
+                  type: string
+                  enum: [pending, processed, validated, rejected]
+                notes:
+                  type: string
+      responses:
+        '200':
+          description: Response updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Response'
+
+    delete:
+      summary: Delete response
+      description: Delete a response (soft delete with retention policy)
+      tags: [Response Management]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/ResponseId'
+      responses:
+        '204':
+          description: Response deleted successfully
+
+  # Response Analytics
+  /responses/analytics:
+    get:
+      summary: Get response analytics
+      description: Retrieve analytics data for responses
+      tags: [Analytics]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: formId
+          in: query
+          schema:
+            type: string
+        - name: from
+          in: query
+          schema:
+            type: string
+            format: date-time
+        - name: to
+          in: query
+          schema:
+            type: string
+            format: date-time
+        - name: groupBy
+          in: query
+          schema:
+            type: string
+            enum: [day, week, month]
+            default: day
+      responses:
+        '200':
+          description: Response analytics
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseAnalytics'
+
+  /responses/analytics/summary:
+    get:
+      summary: Get analytics summary
+      description: Get summarized analytics for responses
+      tags: [Analytics]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: formId
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Analytics summary
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AnalyticsSummary'
+
+  # Data Export
+  /responses/export:
+    post:
+      summary: Export responses
+      description: Export responses in various formats
+      tags: [Data Export]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ExportRequest'
+            examples:
+              csv_export:
+                value:
+                  formId: "form_123"
+                  format: "csv"
+                  filters:
+                    from: "2024-01-01T00:00:00Z"
+                    to: "2024-01-31T23:59:59Z"
+                  fields: ["name", "email", "message", "submittedAt"]
+              excel_export:
+                value:
+                  formId: "form_123"
+                  format: "excel"
+                  includeMetadata: true
+                  groupBy: "day"
+      responses:
+        '202':
+          description: Export job started
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  jobId:
+                    type: string
+                  status:
+                    type: string
+                    example: "processing"
+                  estimatedCompletion:
+                    type: string
+                    format: date-time
+
+  /responses/export/{jobId}:
+    get:
+      summary: Get export status
+      description: Check the status of an export job
+      tags: [Data Export]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/JobId'
+      responses:
+        '200':
+          description: Export job status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExportJob'
+
+  /responses/export/{jobId}/download:
+    get:
+      summary: Download export file
+      description: Download the exported file
+      tags: [Data Export]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/JobId'
+      responses:
+        '200':
+          description: Export file
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  # Response Validation
+  /responses/{responseId}/validate:
+    post:
+      summary: Validate response
+      description: Run validation rules on a response
+      tags: [Validation]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/ResponseId'
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                rules:
+                  type: array
+                  items:
+                    type: string
+                strict:
+                  type: boolean
+                  default: false
+      responses:
+        '200':
+          description: Validation results
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationResult'
+
+  # Bulk Operations
+  /responses/bulk:
+    post:
+      summary: Bulk operations on responses
+      description: Perform bulk operations like update, delete, or export
+      tags: [Bulk Operations]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BulkOperation'
+            examples:
+              bulk_update:
+                value:
+                  operation: "update"
+                  filters:
+                    formId: "form_123"
+                    status: "pending"
+                  updates:
+                    status: "processed"
+              bulk_delete:
+                value:
+                  operation: "delete"
+                  responseIds: ["resp_1", "resp_2", "resp_3"]
+      responses:
+        '202':
+          description: Bulk operation started
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  operationId:
+                    type: string
+                  status:
+                    type: string
+                  affectedCount:
+                    type: integer
+
+  # Integration with External Services
+  /responses/integrations/sheets:
+    post:
+      summary: Sync to Google Sheets
+      description: Sync responses to Google Sheets
+      tags: [Integrations]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [formId, spreadsheetId]
+              properties:
+                formId:
+                  type: string
+                spreadsheetId:
+                  type: string
+                worksheetName:
+                  type: string
+                mapping:
+                  type: object
+                syncMode:
+                  type: string
+                  enum: [append, replace, update]
+                  default: append
+      responses:
+        '200':
+          description: Sync completed successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                  syncedRows:
+                    type: integer
+                  errors:
+                    type: array
+                    items:
+                      type: string
+
+  # Health Check
+  /health:
+    get:
+      summary: Health check
+      description: Check the health status of the response service
+      tags: [Health]
+      responses:
+        '200':
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthStatus'
+
+components:
+  schemas:
+    ResponseSubmission:
+      type: object
+      required: [formId, data]
+      properties:
+        formId:
+          type: string
+          description: ID of the form being responded to
+        data:
+          type: object
+          description: Form field data
+        metadata:
+          type: object
+          properties:
+            userAgent:
+              type: string
+            ipAddress:
+              type: string
+            timestamp:
+              type: string
+              format: date-time
+            source:
+              type: string
+              enum: [web, mobile, api, embed]
+            sessionId:
+              type: string
+        options:
+          type: object
+          properties:
+            notify:
+              type: boolean
+              default: true
+            validate:
+              type: boolean
+              default: true
+
+    Response:
+      type: object
+      properties:
+        id:
+          type: string
+          example: "resp_123"
+        formId:
+          type: string
+          example: "form_456"
+        data:
+          type: object
+          description: Submitted form data
+        status:
+          type: string
+          enum: [pending, processed, validated, rejected]
+          default: pending
+        submittedAt:
+          type: string
+          format: date-time
+        processedAt:
+          type: string
+          format: date-time
+        metadata:
+          $ref: '#/components/schemas/ResponseMetadata'
+
+    ResponseDetails:
+      allOf:
+        - $ref: '#/components/schemas/Response'
+        - type: object
+          properties:
+            validation:
+              $ref: '#/components/schemas/ValidationResult'
+            processing:
+              type: object
+              properties:
+                steps:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      name:
+                        type: string
+                      status:
+                        type: string
+                      completedAt:
+                        type: string
+                        format: date-time
+            integrations:
+              type: array
+              items:
+                type: object
+                properties:
+                  service:
+                    type: string
+                  status:
+                    type: string
+                  lastSync:
+                    type: string
+                    format: date-time
+
+    ResponseMetadata:
+      type: object
+      properties:
+        userAgent:
+          type: string
+        ipAddress:
+          type: string
+        source:
+          type: string
+          enum: [web, mobile, api, embed]
+        sessionId:
+          type: string
+        referrer:
+          type: string
+        geolocation:
+          type: object
+          properties:
+            country:
+              type: string
+            region:
+              type: string
+            city:
+              type: string
+
+    ResponseAnalytics:
+      type: object
+      properties:
+        period:
+          type: object
+          properties:
+            from:
+              type: string
+              format: date-time
+            to:
+              type: string
+              format: date-time
+        summary:
+          $ref: '#/components/schemas/AnalyticsSummary'
+        timeSeries:
+          type: array
+          items:
+            type: object
+            properties:
+              timestamp:
+                type: string
+                format: date-time
+              count:
+                type: integer
+              validCount:
+                type: integer
+              errorCount:
+                type: integer
+        fieldAnalytics:
+          type: array
+          items:
+            type: object
+            properties:
+              fieldName:
+                type: string
+              completionRate:
+                type: number
+              averageLength:
+                type: number
+              topValues:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    value:
+                      type: string
+                    count:
+                      type: integer
+
+    AnalyticsSummary:
+      type: object
+      properties:
+        totalResponses:
+          type: integer
+        validResponses:
+          type: integer
+        invalidResponses:
+          type: integer
+        averageCompletionTime:
+          type: number
+        conversionRate:
+          type: number
+        topSources:
+          type: array
+          items:
+            type: object
+            properties:
+              source:
+                type: string
+              count:
+                type: integer
+              percentage:
+                type: number
+
+    ExportRequest:
+      type: object
+      required: [formId, format]
+      properties:
+        formId:
+          type: string
+        format:
+          type: string
+          enum: [csv, excel, json, pdf]
+        filters:
+          type: object
+          properties:
+            from:
+              type: string
+              format: date-time
+            to:
+              type: string
+              format: date-time
+            status:
+              type: array
+              items:
+                type: string
+            responseIds:
+              type: array
+              items:
+                type: string
+        fields:
+          type: array
+          items:
+            type: string
+          description: Specific fields to include in export
+        options:
+          type: object
+          properties:
+            includeMetadata:
+              type: boolean
+              default: false
+            groupBy:
+              type: string
+              enum: [day, week, month]
+            template:
+              type: string
+
+    ExportJob:
+      type: object
+      properties:
+        id:
+          type: string
+        status:
+          type: string
+          enum: [pending, processing, completed, failed]
+        progress:
+          type: number
+          minimum: 0
+          maximum: 100
+        createdAt:
+          type: string
+          format: date-time
+        completedAt:
+          type: string
+          format: date-time
+        downloadUrl:
+          type: string
+        expiresAt:
+          type: string
+          format: date-time
+        fileSize:
+          type: integer
+        recordCount:
+          type: integer
+        error:
+          type: string
+
+    ValidationResult:
+      type: object
+      properties:
+        valid:
+          type: boolean
+        errors:
+          type: array
+          items:
+            type: object
+            properties:
+              field:
+                type: string
+              message:
+                type: string
+              code:
+                type: string
+        warnings:
+          type: array
+          items:
+            type: object
+            properties:
+              field:
+                type: string
+              message:
+                type: string
+        score:
+          type: number
+          minimum: 0
+          maximum: 1
+
+    BulkOperation:
+      type: object
+      required: [operation]
+      properties:
+        operation:
+          type: string
+          enum: [update, delete, validate, export]
+        filters:
+          type: object
+          properties:
+            formId:
+              type: string
+            status:
+              type: array
+              items:
+                type: string
+            from:
+              type: string
+              format: date-time
+            to:
+              type: string
+              format: date-time
+        responseIds:
+          type: array
+          items:
+            type: string
+        updates:
+          type: object
+          description: Data to update (for update operation)
+        options:
+          type: object
+
+    HealthStatus:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [healthy, degraded, unhealthy]
+        timestamp:
+          type: string
+          format: date-time
+        version:
+          type: string
+        dependencies:
+          type: object
+          properties:
+            database:
+              type: string
+            storage:
+              type: string
+            analytics:
+              type: string
+
+    Pagination:
+      type: object
+      properties:
+        page:
+          type: integer
+        limit:
+          type: integer
+        total:
+          type: integer
+        totalPages:
+          type: integer
+        hasNext:
+          type: boolean
+        hasPrev:
+          type: boolean
+
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+        message:
+          type: string
+        code:
+          type: string
+        timestamp:
+          type: string
+          format: date-time
+
+  parameters:
+    ResponseId:
+      name: responseId
+      in: path
+      required: true
+      schema:
+        type: string
+      description: Unique identifier for the response
+
+    JobId:
+      name: jobId
+      in: path
+      required: true
+      schema:
+        type: string
+      description: Unique identifier for the job
+
+  responses:
+    BadRequest:
+      description: Bad request - invalid input
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+    Unauthorized:
+      description: Unauthorized - authentication required
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+    Forbidden:
+      description: Forbidden - insufficient permissions
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+    InternalServerError:
+      description: Internal server error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT token obtained from auth service
+
+tags:
+  - name: Response Submission
+    description: Form response submission endpoints
+  - name: Response Management
+    description: Managing and retrieving responses
+  - name: Analytics
+    description: Response analytics and insights
+  - name: Data Export
+    description: Exporting response data
+  - name: Validation
+    description: Response validation and quality checks
+  - name: Bulk Operations
+    description: Bulk operations on responses
+  - name: Integrations
+    description: External service integrations
+  - name: Health
+    description: Service health monitoring

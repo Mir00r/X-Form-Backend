@@ -24,6 +24,14 @@
     "spec:merge": "redocly join specs/services/*.yaml --output specs/openapi-merged.yaml",
     "spec:stats": "redocly stats specs/openapi.yaml",
     "spec:preview": "redocly preview-docs specs/openapi.yaml",
+    "gitlab:validate": "npm run spec:validate:all",
+    "gitlab:lint": "npm run spec:lint",
+    "gitlab:security": "npm audit --audit-level=moderate",
+    "gitlab:build-docs": "npm run spec:bundle && npm run spec:docs",
+    "gitlab:test": "npm run spec:test:dev",
+    "gitlab:generate-docs": "npm run gitlab:build-docs && npm run spec:generate:client",
+    "gitlab:version": "npm version --no-git-tag-version",
+    "gitlab:publish": "npm publish --registry=$CI_API_V4_URL/projects/$CI_PROJECT_ID/packages/npm/",
     "precommit": "npm run spec:validate:all && npm run spec:lint",
     "postinstall": "echo 'GitHub Spec Kit setup complete! Run npm run spec:serve to start the documentation portal.'",
     "start": "npm run spec:serve",
@@ -31,7 +39,11 @@
     "test": "npm run spec:test:dev",
     "build": "npm run spec:bundle && npm run spec:docs",
     "validate": "npm run spec:validate:all",
-    "lint": "npm run spec:lint"
+    "lint": "npm run spec:lint",
+    "security-check": "npm run gitlab:security",
+    "build-docs": "npm run gitlab:build-docs",
+    "generate-docs": "npm run gitlab:generate-docs",
+    "test:integration": "echo 'Integration tests not yet implemented'"
   },
   "keywords": [
     "api",

@@ -23,8 +23,70 @@ function loadSpec(specPath) {
   }
 }
 
+// Auto-discover service specifications
+function discoverServices() {
+  const servicesDir = path.join(__dirname, '../services');
+  const services = [];
+  
+  try {
+    const files = fs.readdirSync(servicesDir);
+    files.forEach(file => {
+      if (file.endsWith('-service.yaml')) {
+        const serviceName = file.replace('-service.yaml', '');
+        const specPath = path.join(servicesDir, file);
+        const spec = loadSpec(specPath);
+        
+        if (spec && spec.info) {
+          services.push({
+            name: serviceName,
+            title: spec.info.title || serviceName,
+            description: spec.info.description ? spec.info.description.split('\n')[0] : `${serviceName} service`,
+            version: spec.info.version || '1.0.0',
+            icon: getServiceIcon(serviceName),
+            path: `/docs/${serviceName}`
+          });
+        }
+      }
+    });
+  } catch (error) {
+    console.error('Error discovering services:', error.message);
+  }
+  
+  return services.sort((a, b) => a.name.localeCompare(b.name));
+}
+
+// Get service icon based on service name
+function getServiceIcon(serviceName) {
+  const icons = {
+    'auth': '🔐',
+    'form': '📝',
+    'response': '📊',
+    'realtime': '⚡',
+    'analytics': '📈',
+    'collaboration': '👥',
+    'event-bus': '🔄',
+    'api-gateway': '🌐',
+    'file': '📁'
+  };
+  return icons[serviceName] || '🔧';
+}
+
 // Routes
 app.get('/', (req, res) => {
+  const services = discoverServices();
+  
+  let servicesHtml = '';
+  services.forEach(service => {
+    servicesHtml += `
+      <div class="service">
+        <h3>${service.icon} ${service.title}</h3>
+        <p>${service.description}</p>
+        <p><small>Version: ${service.version}</small></p>
+        <a href="${service.path}">→ View ${service.name} API</a>
+      </div>
+    `;
+  });
+  
   res.send(`
     <html>
       <head>
@@ -37,6 +99,7 @@ app.get('/', (req, res) => {
           a { color: #0366d6; text-decoration: none; }
           a:hover { text-decoration: underline; }
           .status { color: #28a745; font-weight: bold; }
+          .stats { margin: 20px 0; padding: 15px; background: #e8f5e8; border-radius: 5px; }
         </style>
       </head>
       <body>
@@ -44,43 +107,18 @@ app.get('/', (req, res) => {
           <h1>🚀 X-Form Backend API Documentation</h1>
           <p>Centralized API documentation for all microservices</p>
           <p class="status">✅ GitHub Spec Kit Active</p>
+          <div class="stats">
+            <strong>📊 Services Detected: ${services.length}</strong>
+          </div>
         </div>
 
         <div class="service">
-          <h3>📋 Combined API Documentation</h3>
+          <h3>� Combined API Documentation</h3>
           <p>Complete API documentation for all services</p>
           <a href="/docs">→ View Interactive Documentation</a>
         </div>
 
-        <div class="service">
-          <h3>🔐 Auth Service</h3>
-          <p>User authentication and management</p>
-          <a href="/docs/auth">→ View Auth API</a>
-        </div>
-
-        <div class="service">
-          <h3>📝 Form Service</h3>
-          <p>Form creation and management</p>
-          <a href="/docs/form">→ View Form API</a>
-        </div>
-
-        <div class="service">
-          <h3>📊 Response Service</h3>
-          <p>Form response collection and management</p>
-          <a href="/docs/response">→ View Response API</a>
-        </div>
-
-        <div class="service">
-          <h3>⚡ Realtime Service</h3>
-          <p>WebSocket communication and live features</p>
-          <a href="/docs/realtime">→ View Realtime API</a>
-        </div>
-
-        <div class="service">
-          <h3>📈 Analytics Service</h3>
-          <p>Data analytics and reporting</p>
-          <a href="/docs/analytics">→ View Analytics API</a>
-        </div>
+        ${servicesHtml}
 
         <hr style="margin: 30px 0;">
         
@@ -89,6 +127,7 @@ app.get('/', (req, res) => {
           <li><a href="/openapi.yaml">Download OpenAPI YAML</a></li>
           <li><a href="/openapi.json">Download OpenAPI JSON</a></li>
           <li><a href="/health">Health Check</a></li>
+          <li><a href="/services">Services API (JSON)</a></li>
         </ul>
       </body>
     </html>
@@ -151,17 +190,28 @@ app.get('/openapi.json', (req, res) => {
 });
 
 app.get('/health', (req, res) => {
+  const services = discoverServices();
+  const serviceHealth = {};
+  
+  services.forEach(service => {
+    serviceHealth[`${service.name}-service`] = true;
+  });
+  
   res.json({
     status: 'healthy',
     timestamp: new Date().toISOString(),
     version: '1.0.0',
-    services: {
-      'auth-service': fs.existsSync(path.join(__dirname, '../services/auth-service.yaml')),
-      'form-service': fs.existsSync(path.join(__dirname, '../services/form-service.yaml')),
-      'response-service': fs.existsSync(path.join(__dirname, '../services/response-service.yaml')),
-      'realtime-service': fs.existsSync(path.join(__dirname, '../services/realtime-service.yaml')),
-      'analytics-service': fs.existsSync(path.join(__dirname, '../services/analytics-service.yaml'))
-    }
+    servicesDetected: services.length,
+    services: serviceHealth
+  });
+});
+
+// New services API endpoint
+app.get('/services', (req, res) => {
+  const services = discoverServices();
+  res.json({
+    count: services.length,
+    services: services
   });
 });
 

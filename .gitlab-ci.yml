@@ -1,0 +1,385 @@
+stages:
+  - validate
+  - build
+  - test
+  - deploy
+  - publish
+
+variables:
+  NODE_VERSION: "18.x"
+  SPECTRAL_VERSION: "6.11.0"
+
+# Cache configuration
+cache:
+  paths:
+    - node_modules/
+    - specs/node_modules/
+
+# OpenAPI Specification Validation
+validate:openapi:
+  stage: validate
+  image: node:${NODE_VERSION}-alpine
+  before_script:
+    - cd specs
+    - npm ci
+  script:
+    - echo "🔍 Validating OpenAPI specifications..."
+    - npm run validate
+    - npm run lint
+    - echo "✅ All specifications are valid"
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "push"
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+  artifacts:
+    reports:
+      junit: specs/test-results.xml
+    paths:
+      - specs/validation-report.json
+    expire_in: 1 week
+  tags:
+    - docker
+
+# Security scanning for OpenAPI specs
+security:openapi:
+  stage: validate
+  image: node:${NODE_VERSION}-alpine
+  before_script:
+    - cd specs
+    - npm ci
+  script:
+    - echo "🔒 Running security checks on API specifications..."
+    - npm run security-check || true
+    - echo "✅ Security scan completed"
+  allow_failure: true
+  artifacts:
+    paths:
+      - specs/security-report.json
+    expire_in: 1 week
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "push"
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+
+# Build documentation portal
+build:docs:
+  stage: build
+  image: node:${NODE_VERSION}-alpine
+  before_script:
+    - cd specs
+    - npm ci
+  script:
+    - echo "📚 Building API documentation portal..."
+    - npm run build-docs
+    - echo "✅ Documentation portal built successfully"
+  artifacts:
+    paths:
+      - specs/dist/
+    expire_in: 1 week
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "push"
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+
+# Test documentation portal
+test:portal:
+  stage: test
+  image: node:${NODE_VERSION}-alpine
+  services:
+    - name: redis:7-alpine
+      alias: redis
+  variables:
+    REDIS_URL: "redis://redis:6379"
+  before_script:
+    - cd specs
+    - npm ci
+  script:
+    - echo "🧪 Testing documentation portal..."
+    - npm run test
+    - npm run test:integration
+    - echo "✅ Portal tests passed"
+  coverage: '/Lines\s*:\s*(\d+\.\d+)%/'
+  artifacts:
+    reports:
+      coverage_report:
+        coverage_format: cobertura
+        path: specs/coverage/cobertura-coverage.xml
+      junit: specs/test-results.xml
+    paths:
+      - specs/coverage/
+    expire_in: 1 week
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "push"
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+
+# Generate API documentation
+generate:docs:
+  stage: build
+  image: node:${NODE_VERSION}-alpine
+  before_script:
+    - cd specs
+    - npm ci
+  script:
+    - echo "📖 Generating comprehensive API documentation..."
+    - npm run generate-docs
+    - npm run generate-sdk
+    - echo "✅ Documentation generated successfully"
+  artifacts:
+    paths:
+      - specs/generated/
+      - specs/sdk/
+    expire_in: 1 month
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+    - if: $CI_COMMIT_TAG
+
+# Deploy to development environment
+deploy:dev:
+  stage: deploy
+  image: alpine:latest
+  before_script:
+    - apk add --no-cache curl jq
+  script:
+    - echo "🚀 Deploying API documentation to development..."
+    - |
+      curl -X POST \
+        -H "Authorization: Bearer $DEV_DEPLOY_TOKEN" \
+        -H "Content-Type: application/json" \
+        -d '{"environment": "development", "version": "'$CI_COMMIT_SHA'"}' \
+        $DEV_DEPLOY_WEBHOOK
+    - echo "✅ Development deployment triggered"
+  environment:
+    name: development
+    url: https://docs-dev.x-form.com
+  rules:
+    - if: $CI_COMMIT_BRANCH == "develop"
+  tags:
+    - docker
+
+# Deploy to staging environment
+deploy:staging:
+  stage: deploy
+  image: alpine:latest
+  before_script:
+    - apk add --no-cache curl jq
+  script:
+    - echo "🎭 Deploying API documentation to staging..."
+    - |
+      curl -X POST \
+        -H "Authorization: Bearer $STAGING_DEPLOY_TOKEN" \
+        -H "Content-Type: application/json" \
+        -d '{"environment": "staging", "version": "'$CI_COMMIT_SHA'"}' \
+        $STAGING_DEPLOY_WEBHOOK
+    - echo "✅ Staging deployment triggered"
+  environment:
+    name: staging
+    url: https://docs-staging.x-form.com
+  rules:
+    - if: $CI_COMMIT_BRANCH == "main"
+  when: manual
+  tags:
+    - docker
+
+# Deploy to production environment
+deploy:production:
+  stage: deploy
+  image: alpine:latest
+  before_script:
+    - apk add --no-cache curl jq
+  script:
+    - echo "🚀 Deploying API documentation to production..."
+    - |
+      curl -X POST \
+        -H "Authorization: Bearer $PROD_DEPLOY_TOKEN" \
+        -H "Content-Type: application/json" \
+        -d '{"environment": "production", "version": "'$CI_COMMIT_TAG'"}' \
+        $PROD_DEPLOY_WEBHOOK
+    - echo "✅ Production deployment triggered"
+  environment:
+    name: production
+    url: https://docs.x-form.com
+  rules:
+    - if: $CI_COMMIT_TAG && $CI_COMMIT_TAG =~ /^v\d+\.\d+\.\d+$/
+  when: manual
+  tags:
+    - docker
+
+# Publish spec kit package
+publish:spec-kit:
+  stage: publish
+  image: node:${NODE_VERSION}-alpine
+  before_script:
+    - cd specs
+    - npm ci
+  script:
+    - echo "📦 Publishing spec kit package..."
+    - |
+      if [ "$CI_COMMIT_TAG" ]; then
+        echo "Publishing tagged version: $CI_COMMIT_TAG"
+        npm version $CI_COMMIT_TAG --no-git-tag-version
+        npm publish --access public
+      else
+        echo "Publishing beta version"
+        npm version prerelease --preid=beta --no-git-tag-version
+        npm publish --tag beta --access public
+      fi
+    - echo "✅ Spec kit published successfully"
+  rules:
+    - if: $CI_COMMIT_TAG && $CI_COMMIT_TAG =~ /^v\d+\.\d+\.\d+$/
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      when: manual
+  tags:
+    - docker
+
+# Generate release notes
+release:notes:
+  stage: publish
+  image: alpine:latest
+  before_script:
+    - apk add --no-cache git curl jq
+  script:
+    - echo "📝 Generating release notes..."
+    - |
+      # Get the previous tag
+      PREV_TAG=$(git describe --tags --abbrev=0 HEAD~1 2>/dev/null || echo "")
+      
+      # Generate changelog
+      if [ "$PREV_TAG" ]; then
+        echo "## Changes since $PREV_TAG" > RELEASE_NOTES.md
+        git log --pretty=format:"- %s (%h)" $PREV_TAG..HEAD >> RELEASE_NOTES.md
+      else
+        echo "## Initial Release" > RELEASE_NOTES.md
+        echo "- Complete OpenAPI specification suite for X-Form Backend" >> RELEASE_NOTES.md
+      fi
+      
+      # Post to GitLab release API
+      curl -X POST \
+        -H "PRIVATE-TOKEN: $GITLAB_TOKEN" \
+        -H "Content-Type: application/json" \
+        -d @- \
+        "$CI_API_V4_URL/projects/$CI_PROJECT_ID/releases" <<EOF
+      {
+        "name": "Release $CI_COMMIT_TAG",
+        "tag_name": "$CI_COMMIT_TAG",
+        "description": "$(cat RELEASE_NOTES.md | sed 's/"/\\"/g' | tr '\n' '\\n')",
+        "assets": {
+          "links": [
+            {
+              "name": "API Documentation",
+              "url": "https://docs.x-form.com",
+              "link_type": "other"
+            },
+            {
+              "name": "OpenAPI Specification",
+              "url": "$CI_PROJECT_URL/-/jobs/artifacts/$CI_COMMIT_TAG/download?job=generate:docs",
+              "link_type": "package"
+            }
+          ]
+        }
+      }
+      EOF
+    - echo "✅ Release notes generated"
+  artifacts:
+    paths:
+      - RELEASE_NOTES.md
+    expire_in: 1 month
+  rules:
+    - if: $CI_COMMIT_TAG && $CI_COMMIT_TAG =~ /^v\d+\.\d+\.\d+$/
+  tags:
+    - docker
+
+# Notification to Teams/Slack
+notify:success:
+  stage: .post
+  image: alpine:latest
+  before_script:
+    - apk add --no-cache curl jq
+  script:
+    - echo "📢 Sending success notification..."
+    - |
+      if [ "$SLACK_WEBHOOK_URL" ]; then
+        curl -X POST \
+          -H "Content-Type: application/json" \
+          -d '{
+            "text": "✅ X-Form API Spec Kit Pipeline Successful",
+            "attachments": [
+              {
+                "color": "good",
+                "fields": [
+                  {
+                    "title": "Commit",
+                    "value": "'$CI_COMMIT_SHA'",
+                    "short": true
+                  },
+                  {
+                    "title": "Branch",
+                    "value": "'$CI_COMMIT_BRANCH'",
+                    "short": true
+                  },
+                  {
+                    "title": "Pipeline",
+                    "value": "<'$CI_PIPELINE_URL'|View Pipeline>",
+                    "short": true
+                  }
+                ]
+              }
+            ]
+          }' \
+          $SLACK_WEBHOOK_URL
+      fi
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+    - if: $CI_COMMIT_TAG
+  when: on_success
+
+# Notification on failure
+notify:failure:
+  stage: .post
+  image: alpine:latest
+  before_script:
+    - apk add --no-cache curl jq
+  script:
+    - echo "📢 Sending failure notification..."
+    - |
+      if [ "$SLACK_WEBHOOK_URL" ]; then
+        curl -X POST \
+          -H "Content-Type: application/json" \
+          -d '{
+            "text": "❌ X-Form API Spec Kit Pipeline Failed",
+            "attachments": [
+              {
+                "color": "danger",
+                "fields": [
+                  {
+                    "title": "Commit",
+                    "value": "'$CI_COMMIT_SHA'",
+                    "short": true
+                  },
+                  {
+                    "title": "Branch",
+                    "value": "'$CI_COMMIT_BRANCH'",
+                    "short": true
+                  },
+                  {
+                    "title": "Pipeline",
+                    "value": "<'$CI_PIPELINE_URL'|View Pipeline>",
+                    "short": true
+                  }
+                ]
+              }
+            ]
+          }' \
+          $SLACK_WEBHOOK_URL
+      fi
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "push"
+    - if: $CI_COMMIT_TAG
+  when: on_failure
+
+# Cleanup artifacts
+cleanup:artifacts:
+  stage: .post
+  image: alpine:latest
+  script:
+    - echo "🧹 Cleaning up old artifacts..."
+    - echo "Cleanup job completed"
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+  when: manual

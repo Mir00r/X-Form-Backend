@@ -19,6 +19,9 @@ info:
     - **Response Service**: Node.js + TypeScript + Express (Form Responses)
     - **Real-time Service**: Go + WebSockets + Redis (Live Features)
     - **Analytics Service**: Python + FastAPI (Analytics & Reporting)
+    - **Collaboration Service**: Node.js + TypeScript + Express (Real-time Collaboration)
+    - **Event Bus Service**: Go + Redis + NATS (Event Processing & Workflows)
+    - **API Gateway Service**: Go + Gin (Gateway Management & Routing)
     - **File Service**: AWS Lambda + S3 (File Management)
     
     ## 💾 Data Layer
@@ -104,6 +107,12 @@ paths:
   /forms/{formId}/responses/{responseId}:
     $ref: './services/response-service.yaml#/paths/~1forms~1{formId}~1responses~1{responseId}'
   
+  /responses/analytics:
+    $ref: './services/response-service.yaml#/paths/~1responses~1analytics'
+  
+  /responses/export:
+    $ref: './services/response-service.yaml#/paths/~1responses~1export'
+  
   # Analytics Service Endpoints
   /analytics/forms/{formId}:
     $ref: './services/analytics-service.yaml#/paths/~1analytics~1forms~1{formId}'
@@ -111,9 +120,54 @@ paths:
   /analytics/dashboard:
     $ref: './services/analytics-service.yaml#/paths/~1analytics~1dashboard'
   
+  /dashboards:
+    $ref: './services/analytics-service.yaml#/paths/~1dashboards'
+  
+  /reports:
+    $ref: './services/analytics-service.yaml#/paths/~1reports'
+  
   # Real-time Service WebSocket
   /ws:
     $ref: './services/realtime-service.yaml#/paths/~1ws'
+  
+  /realtime/connections:
+    $ref: './services/realtime-service.yaml#/paths/~1connections'
+  
+  /realtime/channels:
+    $ref: './services/realtime-service.yaml#/paths/~1channels'
+  
+  # Collaboration Service Endpoints
+  /workspaces:
+    $ref: './services/collaboration-service.yaml#/paths/~1workspaces'
+  
+  /workspaces/{workspaceId}/documents:
+    $ref: './services/collaboration-service.yaml#/paths/~1workspaces~1{workspaceId}~1documents'
+  
+  /documents/{documentId}/sessions:
+    $ref: './services/collaboration-service.yaml#/paths/~1documents~1{documentId}~1sessions'
+  
+  # Event Bus Service Endpoints
+  /events:
+    $ref: './services/event-bus-service.yaml#/paths/~1events'
+  
+  /events/publish:
+    $ref: './services/event-bus-service.yaml#/paths/~1events~1publish'
+  
+  /subscriptions:
+    $ref: './services/event-bus-service.yaml#/paths/~1subscriptions'
+  
+  /workflows:
+    $ref: './services/event-bus-service.yaml#/paths/~1workflows'
+  
+  # API Gateway Service Management Endpoints
+  /gateway/services:
+    $ref: './services/api-gateway.yaml#/paths/~1services'
+  
+  /gateway/routes:
+    $ref: './services/api-gateway.yaml#/paths/~1routes'
+  
+  /gateway/health-checks:
+    $ref: './services/api-gateway.yaml#/paths/~1health-checks'
 
 components:
   securitySchemes:
@@ -357,6 +411,21 @@ tags:
     externalDocs:
       url: https://docs.x-form.com/realtime
   
+  - name: Collaboration
+    description: Real-time collaboration and team management operations
+    externalDocs:
+      url: https://docs.x-form.com/collaboration
+  
+  - name: Event Bus
+    description: Event publishing, subscriptions and workflow operations
+    externalDocs:
+      url: https://docs.x-form.com/events
+  
+  - name: API Gateway
+    description: Gateway management, routing and service operations
+    externalDocs:
+      url: https://docs.x-form.com/gateway
+  
   - name: Files
     description: File upload and management operations
     externalDocs:
@@ -378,7 +447,13 @@ x-tagGroups:
     tags:
       - Analytics
       - Real-time
+      - Collaboration
       - Files
+  
+  - name: Infrastructure
+    tags:
+      - Event Bus
+      - API Gateway
   
   - name: System
     tags:

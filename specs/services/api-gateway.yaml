@@ -1,0 +1,1390 @@
+openapi: 3.0.3
+info:
+  title: X-Form API Gateway Service API
+  description: |
+    Central API Gateway service for X-Form Backend providing request routing,
+    load balancing, rate limiting, authentication, monitoring, and API management.
+    
+    ## Features
+    - Service discovery and routing
+    - Load balancing and health checks
+    - Rate limiting and throttling
+    - Authentication and authorization
+    - Request/response transformation
+    - API analytics and monitoring
+    - Circuit breaker patterns
+    - API versioning
+    
+  version: 1.0.0
+  contact:
+    name: X-Form Team
+    email: support@x-form.com
+    url: https://docs.x-form.com
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+
+servers:
+  - url: http://localhost:8080
+    description: Development server
+  - url: https://api.x-form.com
+    description: Production server
+  - url: https://staging-api.x-form.com
+    description: Staging server
+
+paths:
+  # Gateway Management
+  /gateway/config:
+    get:
+      summary: Get gateway configuration
+      description: Retrieve current gateway configuration and settings
+      tags: [Gateway Management]
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Gateway configuration
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GatewayConfig'
+              examples:
+                config:
+                  value:
+                    version: "1.0.0"
+                    environment: "production"
+                    features:
+                      rateLimit: true
+                      authentication: true
+                      loadBalancing: true
+                    global:
+                      timeout: 30
+                      retries: 3
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+    put:
+      summary: Update gateway configuration
+      description: Update gateway configuration settings
+      tags: [Gateway Management]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GatewayConfigUpdate'
+      responses:
+        '200':
+          description: Configuration updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GatewayConfig'
+
+  # Service Registration
+  /gateway/services:
+    get:
+      summary: List registered services
+      description: Get all services registered with the gateway
+      tags: [Service Management]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [healthy, unhealthy, all]
+          default: all
+      responses:
+        '200':
+          description: List of registered services
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  services:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Service'
+              examples:
+                services:
+                  value:
+                    services:
+                      - id: "auth-service"
+                        name: "Authentication Service"
+                        version: "1.0.0"
+                        status: "healthy"
+                        instances: 3
+                        uptime: "99.9%"
+                      - id: "form-service"
+                        name: "Form Management Service"
+                        version: "1.2.0"
+                        status: "healthy"
+                        instances: 2
+                        uptime: "99.7%"
+
+    post:
+      summary: Register service
+      description: Register a new service with the gateway
+      tags: [Service Management]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ServiceRegistration'
+            examples:
+              new_service:
+                value:
+                  id: "analytics-service"
+                  name: "Analytics Service"
+                  version: "1.0.0"
+                  baseUrl: "http://analytics-service:5001"
+                  healthCheck: "/health"
+                  routes:
+                    - path: "/api/analytics/*"
+                      methods: ["GET", "POST"]
+                  authentication:
+                    required: true
+                  rateLimit:
+                    requests: 100
+                    window: 60
+      responses:
+        '201':
+          description: Service registered successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Service'
+
+  /gateway/services/{serviceId}:
+    get:
+      summary: Get service details
+      description: Retrieve detailed information about a registered service
+      tags: [Service Management]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/ServiceId'
+      responses:
+        '200':
+          description: Service details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServiceDetails'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    put:
+      summary: Update service
+      description: Update service configuration
+      tags: [Service Management]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/ServiceId'
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ServiceUpdate'
+      responses:
+        '200':
+          description: Service updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Service'
+
+    delete:
+      summary: Unregister service
+      description: Remove a service from the gateway
+      tags: [Service Management]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/ServiceId'
+      responses:
+        '204':
+          description: Service unregistered successfully
+
+  # Route Management
+  /gateway/routes:
+    get:
+      summary: List routes
+      description: Get all configured routes
+      tags: [Route Management]
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: List of routes
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  routes:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Route'
+
+    post:
+      summary: Create route
+      description: Create a new route configuration
+      tags: [Route Management]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RouteRequest'
+            examples:
+              api_route:
+                value:
+                  path: "/api/forms/*"
+                  serviceId: "form-service"
+                  methods: ["GET", "POST", "PUT", "DELETE"]
+                  stripPath: true
+                  preserveHost: false
+                  authentication:
+                    required: true
+                    roles: ["user", "admin"]
+                  rateLimit:
+                    requests: 50
+                    window: 60
+                  transforms:
+                    request:
+                      headers:
+                        add:
+                          X-Gateway-Version: "1.0"
+      responses:
+        '201':
+          description: Route created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Route'
+
+  /gateway/routes/{routeId}:
+    get:
+      summary: Get route details
+      description: Retrieve detailed information about a route
+      tags: [Route Management]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/RouteId'
+      responses:
+        '200':
+          description: Route details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RouteDetails'
+
+    put:
+      summary: Update route
+      description: Update route configuration
+      tags: [Route Management]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/RouteId'
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RouteRequest'
+      responses:
+        '200':
+          description: Route updated successfully
+
+    delete:
+      summary: Delete route
+      description: Remove a route configuration
+      tags: [Route Management]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/RouteId'
+      responses:
+        '204':
+          description: Route deleted successfully
+
+  # Load Balancing
+  /gateway/load-balancer:
+    get:
+      summary: Get load balancer status
+      description: Retrieve load balancer configuration and status
+      tags: [Load Balancing]
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Load balancer status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoadBalancerStatus'
+
+  /gateway/load-balancer/algorithms:
+    get:
+      summary: List load balancing algorithms
+      description: Get available load balancing algorithms
+      tags: [Load Balancing]
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Available algorithms
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  algorithms:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        name:
+                          type: string
+                        description:
+                          type: string
+                        default:
+                          type: boolean
+              examples:
+                algorithms:
+                  value:
+                    algorithms:
+                      - name: "round_robin"
+                        description: "Distribute requests evenly across instances"
+                        default: true
+                      - name: "least_connections"
+                        description: "Route to instance with fewest active connections"
+                        default: false
+                      - name: "weighted_round_robin"
+                        description: "Round robin with instance weights"
+                        default: false
+
+  # Rate Limiting
+  /gateway/rate-limits:
+    get:
+      summary: List rate limit policies
+      description: Get all configured rate limit policies
+      tags: [Rate Limiting]
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Rate limit policies
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  policies:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/RateLimitPolicy'
+
+    post:
+      summary: Create rate limit policy
+      description: Create a new rate limiting policy
+      tags: [Rate Limiting]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RateLimitPolicyRequest'
+            examples:
+              api_limit:
+                value:
+                  name: "API Rate Limit"
+                  description: "Standard API rate limiting"
+                  rules:
+                    - key: "ip"
+                      requests: 100
+                      window: 60
+                      burst: 10
+                    - key: "user"
+                      requests: 1000
+                      window: 3600
+      responses:
+        '201':
+          description: Rate limit policy created successfully
+
+  /gateway/rate-limits/{policyId}:
+    get:
+      summary: Get rate limit policy
+      description: Retrieve details of a specific rate limit policy
+      tags: [Rate Limiting]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/PolicyId'
+      responses:
+        '200':
+          description: Rate limit policy details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RateLimitPolicyDetails'
+
+    put:
+      summary: Update rate limit policy
+      description: Update an existing rate limit policy
+      tags: [Rate Limiting]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/PolicyId'
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RateLimitPolicyRequest'
+      responses:
+        '200':
+          description: Policy updated successfully
+
+    delete:
+      summary: Delete rate limit policy
+      description: Remove a rate limit policy
+      tags: [Rate Limiting]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/PolicyId'
+      responses:
+        '204':
+          description: Policy deleted successfully
+
+  # Authentication & Authorization
+  /gateway/auth/policies:
+    get:
+      summary: List auth policies
+      description: Get all authentication and authorization policies
+      tags: [Authentication]
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Authentication policies
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  policies:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/AuthPolicy'
+
+    post:
+      summary: Create auth policy
+      description: Create a new authentication policy
+      tags: [Authentication]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AuthPolicyRequest'
+      responses:
+        '201':
+          description: Auth policy created successfully
+
+  # Circuit Breaker
+  /gateway/circuit-breakers:
+    get:
+      summary: List circuit breakers
+      description: Get status of all circuit breakers
+      tags: [Circuit Breaker]
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Circuit breaker status
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  circuitBreakers:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/CircuitBreaker'
+
+  /gateway/circuit-breakers/{serviceId}:
+    get:
+      summary: Get circuit breaker status
+      description: Get circuit breaker status for a specific service
+      tags: [Circuit Breaker]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/ServiceId'
+      responses:
+        '200':
+          description: Circuit breaker details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CircuitBreakerDetails'
+
+    post:
+      summary: Control circuit breaker
+      description: Manually open, close, or reset a circuit breaker
+      tags: [Circuit Breaker]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/ServiceId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [action]
+              properties:
+                action:
+                  type: string
+                  enum: [open, close, reset]
+      responses:
+        '200':
+          description: Circuit breaker action executed
+
+  # Analytics and Monitoring
+  /gateway/analytics:
+    get:
+      summary: Get gateway analytics
+      description: Retrieve analytics data for the gateway
+      tags: [Analytics]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: from
+          in: query
+          schema:
+            type: string
+            format: date-time
+        - name: to
+          in: query
+          schema:
+            type: string
+            format: date-time
+        - name: granularity
+          in: query
+          schema:
+            type: string
+            enum: [minute, hour, day]
+            default: hour
+      responses:
+        '200':
+          description: Analytics data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Analytics'
+
+  /gateway/analytics/requests:
+    get:
+      summary: Get request analytics
+      description: Detailed request analytics and statistics
+      tags: [Analytics]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: service
+          in: query
+          schema:
+            type: string
+        - name: route
+          in: query
+          schema:
+            type: string
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [success, error, timeout]
+      responses:
+        '200':
+          description: Request analytics
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RequestAnalytics'
+
+  /gateway/logs:
+    get:
+      summary: Get gateway logs
+      description: Retrieve gateway access and error logs
+      tags: [Monitoring]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: level
+          in: query
+          schema:
+            type: string
+            enum: [debug, info, warn, error]
+        - name: service
+          in: query
+          schema:
+            type: string
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 100
+            maximum: 1000
+      responses:
+        '200':
+          description: Gateway logs
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  logs:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/LogEntry'
+
+  # Health Check
+  /gateway/health:
+    get:
+      summary: Gateway health check
+      description: Check the health status of the gateway and connected services
+      tags: [Health]
+      responses:
+        '200':
+          description: Gateway is healthy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GatewayHealth'
+              examples:
+                healthy:
+                  value:
+                    status: "healthy"
+                    timestamp: "2024-01-15T10:30:00Z"
+                    version: "1.0.0"
+                    uptime: 86400
+                    services:
+                      auth-service: "healthy"
+                      form-service: "healthy"
+                      response-service: "healthy"
+
+  /gateway/health/deep:
+    get:
+      summary: Deep health check
+      description: Comprehensive health check including all downstream services
+      tags: [Health]
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Detailed health status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeepHealthCheck'
+
+components:
+  schemas:
+    GatewayConfig:
+      type: object
+      properties:
+        version:
+          type: string
+        environment:
+          type: string
+          enum: [development, staging, production]
+        features:
+          type: object
+          properties:
+            rateLimit:
+              type: boolean
+            authentication:
+              type: boolean
+            loadBalancing:
+              type: boolean
+            circuitBreaker:
+              type: boolean
+            logging:
+              type: boolean
+        global:
+          type: object
+          properties:
+            timeout:
+              type: integer
+            retries:
+              type: integer
+            cors:
+              type: object
+            headers:
+              type: object
+
+    GatewayConfigUpdate:
+      type: object
+      properties:
+        features:
+          type: object
+        global:
+          type: object
+
+    Service:
+      type: object
+      properties:
+        id:
+          type: string
+          example: "auth-service"
+        name:
+          type: string
+          example: "Authentication Service"
+        version:
+          type: string
+          example: "1.0.0"
+        status:
+          type: string
+          enum: [healthy, unhealthy, unknown]
+        instances:
+          type: integer
+          example: 3
+        uptime:
+          type: string
+          example: "99.9%"
+        baseUrl:
+          type: string
+          example: "http://auth-service:3001"
+        healthCheck:
+          type: string
+          example: "/health"
+        tags:
+          type: array
+          items:
+            type: string
+
+    ServiceDetails:
+      allOf:
+        - $ref: '#/components/schemas/Service'
+        - type: object
+          properties:
+            routes:
+              type: array
+              items:
+                $ref: '#/components/schemas/Route'
+            metrics:
+              $ref: '#/components/schemas/ServiceMetrics'
+            instances:
+              type: array
+              items:
+                $ref: '#/components/schemas/ServiceInstance'
+
+    ServiceRegistration:
+      type: object
+      required: [id, name, baseUrl]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        version:
+          type: string
+        baseUrl:
+          type: string
+        healthCheck:
+          type: string
+        tags:
+          type: array
+          items:
+            type: string
+        routes:
+          type: array
+          items:
+            $ref: '#/components/schemas/RouteConfig'
+        authentication:
+          $ref: '#/components/schemas/AuthConfig'
+        rateLimit:
+          $ref: '#/components/schemas/RateLimitConfig'
+
+    ServiceUpdate:
+      type: object
+      properties:
+        name:
+          type: string
+        version:
+          type: string
+        baseUrl:
+          type: string
+        healthCheck:
+          type: string
+        tags:
+          type: array
+          items:
+            type: string
+
+    ServiceInstance:
+      type: object
+      properties:
+        id:
+          type: string
+        host:
+          type: string
+        port:
+          type: integer
+        status:
+          type: string
+          enum: [healthy, unhealthy]
+        lastSeen:
+          type: string
+          format: date-time
+        weight:
+          type: number
+        connections:
+          type: integer
+
+    Route:
+      type: object
+      properties:
+        id:
+          type: string
+        path:
+          type: string
+        serviceId:
+          type: string
+        methods:
+          type: array
+          items:
+            type: string
+        status:
+          type: string
+          enum: [active, inactive]
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    RouteDetails:
+      allOf:
+        - $ref: '#/components/schemas/Route'
+        - type: object
+          properties:
+            config:
+              $ref: '#/components/schemas/RouteConfig'
+            metrics:
+              $ref: '#/components/schemas/RouteMetrics'
+
+    RouteRequest:
+      type: object
+      required: [path, serviceId]
+      properties:
+        path:
+          type: string
+        serviceId:
+          type: string
+        methods:
+          type: array
+          items:
+            type: string
+        stripPath:
+          type: boolean
+        preserveHost:
+          type: boolean
+        authentication:
+          $ref: '#/components/schemas/AuthConfig'
+        rateLimit:
+          $ref: '#/components/schemas/RateLimitConfig'
+        transforms:
+          $ref: '#/components/schemas/TransformConfig'
+
+    RouteConfig:
+      type: object
+      properties:
+        path:
+          type: string
+        methods:
+          type: array
+          items:
+            type: string
+        stripPath:
+          type: boolean
+        preserveHost:
+          type: boolean
+        timeout:
+          type: integer
+        retries:
+          type: integer
+
+    TransformConfig:
+      type: object
+      properties:
+        request:
+          type: object
+          properties:
+            headers:
+              type: object
+              properties:
+                add:
+                  type: object
+                remove:
+                  type: array
+                  items:
+                    type: string
+            query:
+              type: object
+        response:
+          type: object
+          properties:
+            headers:
+              type: object
+
+    LoadBalancerStatus:
+      type: object
+      properties:
+        algorithm:
+          type: string
+        services:
+          type: array
+          items:
+            type: object
+            properties:
+              serviceId:
+                type: string
+              instances:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ServiceInstance'
+              health:
+                type: string
+
+    RateLimitPolicy:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        description:
+          type: string
+        status:
+          type: string
+          enum: [active, inactive]
+        createdAt:
+          type: string
+          format: date-time
+
+    RateLimitPolicyDetails:
+      allOf:
+        - $ref: '#/components/schemas/RateLimitPolicy'
+        - type: object
+          properties:
+            rules:
+              type: array
+              items:
+                $ref: '#/components/schemas/RateLimitRule'
+            statistics:
+              type: object
+              properties:
+                totalRequests:
+                  type: integer
+                blockedRequests:
+                  type: integer
+
+    RateLimitPolicyRequest:
+      type: object
+      required: [name, rules]
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        rules:
+          type: array
+          items:
+            $ref: '#/components/schemas/RateLimitRule'
+
+    RateLimitRule:
+      type: object
+      required: [key, requests, window]
+      properties:
+        key:
+          type: string
+          enum: [ip, user, api_key, service]
+        requests:
+          type: integer
+        window:
+          type: integer
+          description: Time window in seconds
+        burst:
+          type: integer
+          description: Burst allowance
+
+    RateLimitConfig:
+      type: object
+      properties:
+        requests:
+          type: integer
+        window:
+          type: integer
+        burst:
+          type: integer
+        key:
+          type: string
+
+    AuthPolicy:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        type:
+          type: string
+          enum: [jwt, api_key, oauth2, basic]
+        status:
+          type: string
+          enum: [active, inactive]
+
+    AuthPolicyRequest:
+      type: object
+      required: [name, type, config]
+      properties:
+        name:
+          type: string
+        type:
+          type: string
+          enum: [jwt, api_key, oauth2, basic]
+        config:
+          type: object
+
+    AuthConfig:
+      type: object
+      properties:
+        required:
+          type: boolean
+        type:
+          type: string
+          enum: [jwt, api_key, oauth2, basic]
+        roles:
+          type: array
+          items:
+            type: string
+        scopes:
+          type: array
+          items:
+            type: string
+
+    CircuitBreaker:
+      type: object
+      properties:
+        serviceId:
+          type: string
+        status:
+          type: string
+          enum: [closed, open, half_open]
+        failureCount:
+          type: integer
+        successCount:
+          type: integer
+        lastFailure:
+          type: string
+          format: date-time
+
+    CircuitBreakerDetails:
+      allOf:
+        - $ref: '#/components/schemas/CircuitBreaker'
+        - type: object
+          properties:
+            config:
+              type: object
+              properties:
+                failureThreshold:
+                  type: integer
+                timeout:
+                  type: integer
+                successThreshold:
+                  type: integer
+            history:
+              type: array
+              items:
+                type: object
+                properties:
+                  timestamp:
+                    type: string
+                    format: date-time
+                  status:
+                    type: string
+                  duration:
+                    type: number
+
+    Analytics:
+      type: object
+      properties:
+        period:
+          type: object
+          properties:
+            from:
+              type: string
+              format: date-time
+            to:
+              type: string
+              format: date-time
+        summary:
+          type: object
+          properties:
+            totalRequests:
+              type: integer
+            successfulRequests:
+              type: integer
+            failedRequests:
+              type: integer
+            averageResponseTime:
+              type: number
+        timeSeries:
+          type: array
+          items:
+            type: object
+            properties:
+              timestamp:
+                type: string
+                format: date-time
+              requests:
+                type: integer
+              responseTime:
+                type: number
+
+    RequestAnalytics:
+      type: object
+      properties:
+        requests:
+          type: array
+          items:
+            type: object
+            properties:
+              timestamp:
+                type: string
+                format: date-time
+              method:
+                type: string
+              path:
+                type: string
+              statusCode:
+                type: integer
+              responseTime:
+                type: number
+              service:
+                type: string
+
+    ServiceMetrics:
+      type: object
+      properties:
+        requestCount:
+          type: integer
+        errorRate:
+          type: number
+        averageResponseTime:
+          type: number
+        currentConnections:
+          type: integer
+
+    RouteMetrics:
+      type: object
+      properties:
+        requestCount:
+          type: integer
+        errorRate:
+          type: number
+        averageResponseTime:
+          type: number
+        rateLimitHits:
+          type: integer
+
+    LogEntry:
+      type: object
+      properties:
+        timestamp:
+          type: string
+          format: date-time
+        level:
+          type: string
+        message:
+          type: string
+        service:
+          type: string
+        requestId:
+          type: string
+        metadata:
+          type: object
+
+    GatewayHealth:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [healthy, degraded, unhealthy]
+        timestamp:
+          type: string
+          format: date-time
+        version:
+          type: string
+        uptime:
+          type: integer
+        services:
+          type: object
+          additionalProperties:
+            type: string
+
+    DeepHealthCheck:
+      allOf:
+        - $ref: '#/components/schemas/GatewayHealth'
+        - type: object
+          properties:
+            components:
+              type: object
+              properties:
+                database:
+                  type: object
+                  properties:
+                    status:
+                      type: string
+                    responseTime:
+                      type: number
+                loadBalancer:
+                  type: object
+                  properties:
+                    status:
+                      type: string
+                    activeInstances:
+                      type: integer
+                circuitBreakers:
+                  type: object
+                  properties:
+                    open:
+                      type: integer
+                    closed:
+                      type: integer
+
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+        message:
+          type: string
+        code:
+          type: string
+        timestamp:
+          type: string
+          format: date-time
+
+  parameters:
+    ServiceId:
+      name: serviceId
+      in: path
+      required: true
+      schema:
+        type: string
+      description: Unique identifier for the service
+
+    RouteId:
+      name: routeId
+      in: path
+      required: true
+      schema:
+        type: string
+      description: Unique identifier for the route
+
+    PolicyId:
+      name: policyId
+      in: path
+      required: true
+      schema:
+        type: string
+      description: Unique identifier for the policy
+
+  responses:
+    BadRequest:
+      description: Bad request - invalid input
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+    Unauthorized:
+      description: Unauthorized - authentication required
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+    Forbidden:
+      description: Forbidden - insufficient permissions
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+    InternalServerError:
+      description: Internal server error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT token obtained from auth service
+
+tags:
+  - name: Gateway Management
+    description: Gateway configuration and management
+  - name: Service Management
+    description: Service registration and discovery
+  - name: Route Management
+    description: Route configuration and management
+  - name: Load Balancing
+    description: Load balancing configuration and monitoring
+  - name: Rate Limiting
+    description: Rate limiting policies and enforcement
+  - name: Authentication
+    description: Authentication and authorization policies
+  - name: Circuit Breaker
+    description: Circuit breaker patterns and control
+  - name: Analytics
+    description: Gateway analytics and metrics
+  - name: Monitoring
+    description: Logging and monitoring
+  - name: Health
+    description: Health checks and status monitoring

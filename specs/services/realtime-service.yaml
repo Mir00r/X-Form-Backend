@@ -1,0 +1,1007 @@
+openapi: 3.0.3
+info:
+  title: X-Form Realtime Service API
+  description: |
+    Real-time communication service for X-Form Backend providing WebSocket connections,
+    live updates, presence indicators, and real-time collaboration features.
+    
+    ## Features
+    - WebSocket connections
+    - Real-time form updates
+    - Live response monitoring
+    - Presence indicators
+    - Push notifications
+    - Live collaboration
+    - Event streaming
+    
+  version: 1.0.0
+  contact:
+    name: X-Form Team
+    email: support@x-form.com
+    url: https://docs.x-form.com
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+
+servers:
+  - url: http://localhost:8002
+    description: Development server
+  - url: https://realtime.x-form.com
+    description: Production server
+  - url: https://staging-realtime.x-form.com
+    description: Staging server
+
+paths:
+  # Connection Management
+  /connect:
+    post:
+      summary: Initialize WebSocket connection
+      description: Get connection details for establishing WebSocket connection
+      tags: [Connection Management]
+      security:
+        - bearerAuth: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                channels:
+                  type: array
+                  items:
+                    type: string
+                  description: Channels to subscribe to
+                clientInfo:
+                  type: object
+                  properties:
+                    userAgent:
+                      type: string
+                    platform:
+                      type: string
+            examples:
+              form_connection:
+                value:
+                  channels: ["form:form_123", "user:user_456"]
+                  clientInfo:
+                    userAgent: "Mozilla/5.0..."
+                    platform: "web"
+      responses:
+        '200':
+          description: Connection details
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  connectionId:
+                    type: string
+                  websocketUrl:
+                    type: string
+                  token:
+                    type: string
+                  expiresAt:
+                    type: string
+                    format: date-time
+              examples:
+                connection:
+                  value:
+                    connectionId: "conn_123456"
+                    websocketUrl: "wss://realtime.x-form.com/ws?token=..."
+                    token: "rt_token_789"
+                    expiresAt: "2024-01-15T11:30:00Z"
+
+  /connections:
+    get:
+      summary: List active connections
+      description: Get list of active WebSocket connections (admin only)
+      tags: [Connection Management]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: channel
+          in: query
+          schema:
+            type: string
+        - name: userId
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Active connections
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  connections:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Connection'
+                  total:
+                    type: integer
+
+  /connections/{connectionId}:
+    get:
+      summary: Get connection details
+      description: Retrieve details about a specific connection
+      tags: [Connection Management]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/ConnectionId'
+      responses:
+        '200':
+          description: Connection details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConnectionDetails'
+
+    delete:
+      summary: Disconnect client
+      description: Forcefully disconnect a WebSocket connection
+      tags: [Connection Management]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/ConnectionId'
+      responses:
+        '204':
+          description: Connection terminated
+
+  # Channel Management
+  /channels:
+    get:
+      summary: List channels
+      description: Get list of available channels and their statistics
+      tags: [Channel Management]
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Available channels
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  channels:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Channel'
+
+    post:
+      summary: Create channel
+      description: Create a new real-time channel
+      tags: [Channel Management]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, type]
+              properties:
+                name:
+                  type: string
+                type:
+                  type: string
+                  enum: [public, private, presence]
+                config:
+                  type: object
+                  properties:
+                    maxConnections:
+                      type: integer
+                    requireAuth:
+                      type: boolean
+                    persistMessages:
+                      type: boolean
+            examples:
+              form_channel:
+                value:
+                  name: "form:form_123"
+                  type: "presence"
+                  config:
+                    maxConnections: 100
+                    requireAuth: true
+                    persistMessages: false
+      responses:
+        '201':
+          description: Channel created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Channel'
+
+  /channels/{channelName}:
+    get:
+      summary: Get channel details
+      description: Retrieve details about a specific channel
+      tags: [Channel Management]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/ChannelName'
+      responses:
+        '200':
+          description: Channel details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChannelDetails'
+
+    delete:
+      summary: Delete channel
+      description: Delete a channel and disconnect all clients
+      tags: [Channel Management]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/ChannelName'
+      responses:
+        '204':
+          description: Channel deleted successfully
+
+  # Message Broadcasting
+  /broadcast:
+    post:
+      summary: Broadcast message
+      description: Send a message to one or more channels
+      tags: [Message Broadcasting]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BroadcastMessage'
+            examples:
+              form_update:
+                value:
+                  channels: ["form:form_123"]
+                  event: "form.updated"
+                  data:
+                    formId: "form_123"
+                    changes:
+                      - field: "title"
+                        oldValue: "Old Title"
+                        newValue: "New Title"
+                  options:
+                    excludeSender: true
+              response_notification:
+                value:
+                  channels: ["user:user_456", "form:form_123"]
+                  event: "response.submitted"
+                  data:
+                    responseId: "resp_789"
+                    formId: "form_123"
+                    summary:
+                      name: "John Doe"
+                      email: "john@example.com"
+      responses:
+        '200':
+          description: Message broadcasted successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  messageId:
+                    type: string
+                  deliveredTo:
+                    type: integer
+                  timestamp:
+                    type: string
+                    format: date-time
+
+  /broadcast/bulk:
+    post:
+      summary: Bulk broadcast messages
+      description: Send multiple messages to different channels
+      tags: [Message Broadcasting]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [messages]
+              properties:
+                messages:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/BroadcastMessage'
+      responses:
+        '200':
+          description: Messages broadcasted successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  successful:
+                    type: integer
+                  failed:
+                    type: integer
+                  results:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        messageId:
+                          type: string
+                        status:
+                          type: string
+                        deliveredTo:
+                          type: integer
+
+  # Presence Management
+  /presence/{channelName}:
+    get:
+      summary: Get channel presence
+      description: Get list of users currently present in a channel
+      tags: [Presence Management]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/ChannelName'
+      responses:
+        '200':
+          description: Channel presence information
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  channel:
+                    type: string
+                  count:
+                    type: integer
+                  users:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/PresenceUser'
+
+    post:
+      summary: Update presence
+      description: Update user presence information in a channel
+      tags: [Presence Management]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/ChannelName'
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                status:
+                  type: string
+                  enum: [online, away, busy, offline]
+                metadata:
+                  type: object
+                  properties:
+                    currentPage:
+                      type: string
+                    lastActivity:
+                      type: string
+                      format: date-time
+                    cursor:
+                      type: object
+      responses:
+        '200':
+          description: Presence updated successfully
+
+  # Real-time Form Features
+  /forms/{formId}/live:
+    get:
+      summary: Get live form data
+      description: Get real-time information about a form
+      tags: [Live Forms]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/FormId'
+      responses:
+        '200':
+          description: Live form data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LiveFormData'
+
+    post:
+      summary: Start live session
+      description: Start a live editing session for a form
+      tags: [Live Forms]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/FormId'
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                sessionType:
+                  type: string
+                  enum: [edit, view, collaborate]
+                permissions:
+                  type: array
+                  items:
+                    type: string
+      responses:
+        '201':
+          description: Live session started
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LiveSession'
+
+  /forms/{formId}/live/responses:
+    get:
+      summary: Get live response stream
+      description: Get real-time stream of form responses
+      tags: [Live Forms]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/FormId'
+        - name: includeTest
+          in: query
+          schema:
+            type: boolean
+            default: false
+      responses:
+        '200':
+          description: Live response stream connection info
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  streamUrl:
+                    type: string
+                  channel:
+                    type: string
+                  filters:
+                    type: object
+
+  # Push Notifications
+  /notifications:
+    post:
+      summary: Send push notification
+      description: Send push notification to users
+      tags: [Push Notifications]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PushNotification'
+            examples:
+              response_alert:
+                value:
+                  recipients:
+                    - type: "user"
+                      id: "user_123"
+                    - type: "channel"
+                      id: "form:form_456"
+                  title: "New Form Response"
+                  message: "You have a new response on your contact form"
+                  data:
+                    formId: "form_456"
+                    responseId: "resp_789"
+                  options:
+                    priority: "high"
+                    badge: 1
+      responses:
+        '200':
+          description: Notification sent successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  notificationId:
+                    type: string
+                  sentTo:
+                    type: integer
+                  deliveryStatus:
+                    type: object
+
+  /notifications/tokens:
+    post:
+      summary: Register notification token
+      description: Register a device token for push notifications
+      tags: [Push Notifications]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token, platform]
+              properties:
+                token:
+                  type: string
+                platform:
+                  type: string
+                  enum: [web, ios, android]
+                deviceInfo:
+                  type: object
+      responses:
+        '201':
+          description: Token registered successfully
+
+    delete:
+      summary: Unregister notification token
+      description: Remove a device token from notifications
+      tags: [Push Notifications]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token]
+              properties:
+                token:
+                  type: string
+      responses:
+        '204':
+          description: Token unregistered successfully
+
+  # Analytics and Monitoring
+  /analytics/realtime:
+    get:
+      summary: Get real-time analytics
+      description: Get real-time usage analytics
+      tags: [Analytics]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: metric
+          in: query
+          schema:
+            type: string
+            enum: [connections, messages, channels]
+        - name: timeframe
+          in: query
+          schema:
+            type: string
+            enum: [1h, 6h, 24h]
+            default: 1h
+      responses:
+        '200':
+          description: Real-time analytics
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RealtimeAnalytics'
+
+  # Health Check
+  /health:
+    get:
+      summary: Health check
+      description: Check the health status of the realtime service
+      tags: [Health]
+      responses:
+        '200':
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthStatus'
+
+components:
+  schemas:
+    Connection:
+      type: object
+      properties:
+        id:
+          type: string
+        userId:
+          type: string
+        status:
+          type: string
+          enum: [connected, disconnected, reconnecting]
+        connectedAt:
+          type: string
+          format: date-time
+        lastSeen:
+          type: string
+          format: date-time
+        channels:
+          type: array
+          items:
+            type: string
+        clientInfo:
+          type: object
+
+    ConnectionDetails:
+      allOf:
+        - $ref: '#/components/schemas/Connection'
+        - type: object
+          properties:
+            messageCount:
+              type: integer
+            averageLatency:
+              type: number
+            errors:
+              type: array
+              items:
+                type: object
+
+    Channel:
+      type: object
+      properties:
+        name:
+          type: string
+        type:
+          type: string
+          enum: [public, private, presence]
+        connectionCount:
+          type: integer
+        messageCount:
+          type: integer
+        createdAt:
+          type: string
+          format: date-time
+        config:
+          type: object
+
+    ChannelDetails:
+      allOf:
+        - $ref: '#/components/schemas/Channel'
+        - type: object
+          properties:
+            connections:
+              type: array
+              items:
+                $ref: '#/components/schemas/Connection'
+            recentMessages:
+              type: array
+              items:
+                $ref: '#/components/schemas/Message'
+            statistics:
+              type: object
+
+    BroadcastMessage:
+      type: object
+      required: [channels, event, data]
+      properties:
+        channels:
+          type: array
+          items:
+            type: string
+          description: Target channels for the message
+        event:
+          type: string
+          description: Event type/name
+        data:
+          type: object
+          description: Message payload
+        options:
+          type: object
+          properties:
+            excludeSender:
+              type: boolean
+              default: false
+            persist:
+              type: boolean
+              default: false
+            priority:
+              type: string
+              enum: [low, normal, high]
+              default: normal
+            ttl:
+              type: integer
+              description: Time to live in seconds
+
+    Message:
+      type: object
+      properties:
+        id:
+          type: string
+        event:
+          type: string
+        data:
+          type: object
+        timestamp:
+          type: string
+          format: date-time
+        sender:
+          type: string
+        channel:
+          type: string
+
+    PresenceUser:
+      type: object
+      properties:
+        userId:
+          type: string
+        status:
+          type: string
+          enum: [online, away, busy, offline]
+        joinedAt:
+          type: string
+          format: date-time
+        lastSeen:
+          type: string
+          format: date-time
+        metadata:
+          type: object
+
+    LiveFormData:
+      type: object
+      properties:
+        formId:
+          type: string
+        activeUsers:
+          type: array
+          items:
+            $ref: '#/components/schemas/PresenceUser'
+        responseCount:
+          type: integer
+        lastResponse:
+          type: string
+          format: date-time
+        averageCompletionTime:
+          type: number
+        liveMetrics:
+          type: object
+          properties:
+            viewsToday:
+              type: integer
+            responsesToday:
+              type: integer
+            conversionRate:
+              type: number
+
+    LiveSession:
+      type: object
+      properties:
+        sessionId:
+          type: string
+        formId:
+          type: string
+        type:
+          type: string
+          enum: [edit, view, collaborate]
+        startedAt:
+          type: string
+          format: date-time
+        participants:
+          type: array
+          items:
+            $ref: '#/components/schemas/PresenceUser'
+        permissions:
+          type: array
+          items:
+            type: string
+
+    PushNotification:
+      type: object
+      required: [recipients, title, message]
+      properties:
+        recipients:
+          type: array
+          items:
+            type: object
+            properties:
+              type:
+                type: string
+                enum: [user, channel, broadcast]
+              id:
+                type: string
+        title:
+          type: string
+          maxLength: 100
+        message:
+          type: string
+          maxLength: 500
+        data:
+          type: object
+          description: Additional data payload
+        options:
+          type: object
+          properties:
+            priority:
+              type: string
+              enum: [low, normal, high]
+            badge:
+              type: integer
+            sound:
+              type: string
+            icon:
+              type: string
+            clickAction:
+              type: string
+            ttl:
+              type: integer
+
+    RealtimeAnalytics:
+      type: object
+      properties:
+        timeframe:
+          type: string
+        metrics:
+          type: object
+          properties:
+            activeConnections:
+              type: integer
+            messagesPerSecond:
+              type: number
+            averageLatency:
+              type: number
+            errorRate:
+              type: number
+        channels:
+          type: array
+          items:
+            type: object
+            properties:
+              name:
+                type: string
+              connections:
+                type: integer
+              messages:
+                type: integer
+        timeSeries:
+          type: array
+          items:
+            type: object
+            properties:
+              timestamp:
+                type: string
+                format: date-time
+              connections:
+                type: integer
+              messages:
+                type: integer
+              latency:
+                type: number
+
+    HealthStatus:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [healthy, degraded, unhealthy]
+        timestamp:
+          type: string
+          format: date-time
+        version:
+          type: string
+        metrics:
+          type: object
+          properties:
+            activeConnections:
+              type: integer
+            totalChannels:
+              type: integer
+            messagesPerSecond:
+              type: number
+            memoryUsage:
+              type: number
+        dependencies:
+          type: object
+          properties:
+            redis:
+              type: string
+            eventBus:
+              type: string
+
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+        message:
+          type: string
+        code:
+          type: string
+        timestamp:
+          type: string
+          format: date-time
+
+  parameters:
+    ConnectionId:
+      name: connectionId
+      in: path
+      required: true
+      schema:
+        type: string
+      description: Unique identifier for the connection
+
+    ChannelName:
+      name: channelName
+      in: path
+      required: true
+      schema:
+        type: string
+      description: Name of the channel
+
+    FormId:
+      name: formId
+      in: path
+      required: true
+      schema:
+        type: string
+      description: Unique identifier for the form
+
+  responses:
+    BadRequest:
+      description: Bad request - invalid input
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+    Unauthorized:
+      description: Unauthorized - authentication required
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+    Forbidden:
+      description: Forbidden - insufficient permissions
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+    InternalServerError:
+      description: Internal server error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT token obtained from auth service
+
+tags:
+  - name: Connection Management
+    description: WebSocket connection management
+  - name: Channel Management
+    description: Real-time channel operations
+  - name: Message Broadcasting
+    description: Broadcasting messages to channels
+  - name: Presence Management
+    description: User presence tracking
+  - name: Live Forms
+    description: Real-time form features
+  - name: Push Notifications
+    description: Push notification management
+  - name: Analytics
+    description: Real-time analytics and monitoring
+  - name: Health
+    description: Service health monitoring

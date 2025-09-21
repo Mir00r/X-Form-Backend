@@ -1,0 +1,1235 @@
+openapi: 3.0.3
+info:
+  title: X-Form Event Bus Service API
+  description: |
+    Centralized event bus and message routing service for X-Form Backend providing
+    asynchronous communication, event streaming, pub/sub messaging, and workflow orchestration.
+    
+    ## Features
+    - Event publishing and subscription
+    - Message routing and filtering
+    - Event streaming and replay
+    - Dead letter queues
+    - Event transformation
+    - Workflow orchestration
+    - Real-time notifications
+    
+  version: 1.0.0
+  contact:
+    name: X-Form Team
+    email: support@x-form.com
+    url: https://docs.x-form.com
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+
+servers:
+  - url: http://localhost:3004
+    description: Development server
+  - url: https://events.x-form.com
+    description: Production server
+  - url: https://staging-events.x-form.com
+    description: Staging server
+
+paths:
+  # Event Publishing
+  /events:
+    post:
+      summary: Publish event
+      description: Publish a new event to the event bus
+      tags: [Event Publishing]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EventPayload'
+            examples:
+              form_created:
+                value:
+                  type: "form.created"
+                  source: "form-service"
+                  data:
+                    formId: "form_123"
+                    title: "Customer Feedback Form"
+                    createdBy: "user_456"
+                  metadata:
+                    version: "1.0"
+                    correlationId: "corr_789"
+              user_registered:
+                value:
+                  type: "user.registered"
+                  source: "auth-service"
+                  data:
+                    userId: "user_123"
+                    email: "user@example.com"
+                    role: "member"
+                  metadata:
+                    timestamp: "2024-01-15T10:30:00Z"
+      responses:
+        '202':
+          description: Event accepted for processing
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  eventId:
+                    type: string
+                    example: "evt_123456"
+                  status:
+                    type: string
+                    example: "accepted"
+                  timestamp:
+                    type: string
+                    format: date-time
+              examples:
+                success:
+                  value:
+                    eventId: "evt_123456"
+                    status: "accepted"
+                    timestamp: "2024-01-15T10:30:00Z"
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+    get:
+      summary: List events
+      description: Retrieve events based on filters and criteria
+      tags: [Event Publishing]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: type
+          in: query
+          schema:
+            type: string
+          description: Filter by event type
+        - name: source
+          in: query
+          schema:
+            type: string
+          description: Filter by event source
+        - name: from
+          in: query
+          schema:
+            type: string
+            format: date-time
+          description: Events from this timestamp
+        - name: to
+          in: query
+          schema:
+            type: string
+            format: date-time
+          description: Events until this timestamp
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+            maximum: 1000
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+      responses:
+        '200':
+          description: List of events
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  events:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Event'
+                  pagination:
+                    $ref: '#/components/schemas/Pagination'
+              examples:
+                success:
+                  value:
+                    events:
+                      - id: "evt_123"
+                        type: "form.created"
+                        source: "form-service"
+                        timestamp: "2024-01-15T10:30:00Z"
+                        status: "delivered"
+                    pagination:
+                      offset: 0
+                      limit: 50
+                      total: 150
+
+  /events/{eventId}:
+    get:
+      summary: Get event details
+      description: Retrieve detailed information about a specific event
+      tags: [Event Publishing]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/EventId'
+      responses:
+        '200':
+          description: Event details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EventDetails'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /events/{eventId}/retry:
+    post:
+      summary: Retry event processing
+      description: Retry processing of a failed event
+      tags: [Event Publishing]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/EventId'
+      responses:
+        '202':
+          description: Event retry initiated
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Event cannot be retried
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  # Subscriptions
+  /subscriptions:
+    get:
+      summary: List subscriptions
+      description: Get all active subscriptions for the authenticated service
+      tags: [Subscriptions]
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: List of subscriptions
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  subscriptions:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Subscription'
+
+    post:
+      summary: Create subscription
+      description: Subscribe to events matching specified criteria
+      tags: [Subscriptions]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SubscriptionRequest'
+            examples:
+              form_events:
+                value:
+                  name: "Form Events Handler"
+                  endpoint: "https://analytics.x-form.com/webhooks/events"
+                  events:
+                    - "form.created"
+                    - "form.updated"
+                    - "form.deleted"
+                  filters:
+                    source: ["form-service"]
+                  options:
+                    retryPolicy:
+                      maxRetries: 3
+                      backoffMultiplier: 2
+              user_notifications:
+                value:
+                  name: "User Notifications"
+                  endpoint: "https://notifications.x-form.com/webhooks/user-events"
+                  events:
+                    - "user.*"
+                  filters:
+                    metadata:
+                      notificationRequired: true
+      responses:
+        '201':
+          description: Subscription created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Subscription'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+  /subscriptions/{subscriptionId}:
+    get:
+      summary: Get subscription details
+      description: Retrieve detailed information about a subscription
+      tags: [Subscriptions]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/SubscriptionId'
+      responses:
+        '200':
+          description: Subscription details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SubscriptionDetails'
+
+    put:
+      summary: Update subscription
+      description: Update subscription configuration
+      tags: [Subscriptions]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/SubscriptionId'
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SubscriptionRequest'
+      responses:
+        '200':
+          description: Subscription updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Subscription'
+
+    delete:
+      summary: Delete subscription
+      description: Remove a subscription
+      tags: [Subscriptions]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/SubscriptionId'
+      responses:
+        '204':
+          description: Subscription deleted successfully
+
+  /subscriptions/{subscriptionId}/pause:
+    post:
+      summary: Pause subscription
+      description: Temporarily pause event delivery for a subscription
+      tags: [Subscriptions]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/SubscriptionId'
+      responses:
+        '200':
+          description: Subscription paused successfully
+
+  /subscriptions/{subscriptionId}/resume:
+    post:
+      summary: Resume subscription
+      description: Resume event delivery for a paused subscription
+      tags: [Subscriptions]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/SubscriptionId'
+      responses:
+        '200':
+          description: Subscription resumed successfully
+
+  # Event Streams
+  /streams:
+    get:
+      summary: List event streams
+      description: Get available event streams
+      tags: [Event Streams]
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Available event streams
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  streams:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/EventStream'
+
+  /streams/{streamName}:
+    get:
+      summary: Connect to event stream
+      description: Establish a connection to an event stream (SSE or WebSocket)
+      tags: [Event Streams]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/StreamName'
+        - name: lastEventId
+          in: query
+          schema:
+            type: string
+          description: Resume from this event ID
+        - name: filter
+          in: query
+          schema:
+            type: string
+          description: Event type filter (comma-separated)
+      responses:
+        '200':
+          description: Stream connection established
+          content:
+            text/event-stream:
+              schema:
+                type: string
+              examples:
+                sse_stream:
+                  value: |
+                    data: {"id":"evt_123","type":"form.created","data":{"formId":"form_456"}}
+                    
+                    data: {"id":"evt_124","type":"user.registered","data":{"userId":"user_789"}}
+
+  /streams/{streamName}/replay:
+    post:
+      summary: Replay events
+      description: Replay events from a specific point in time
+      tags: [Event Streams]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/StreamName'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [from]
+              properties:
+                from:
+                  type: string
+                  format: date-time
+                  description: Replay events from this timestamp
+                to:
+                  type: string
+                  format: date-time
+                  description: Replay events until this timestamp
+                types:
+                  type: array
+                  items:
+                    type: string
+                  description: Filter by event types
+                speed:
+                  type: number
+                  default: 1.0
+                  description: Replay speed multiplier
+      responses:
+        '202':
+          description: Replay initiated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  replayId:
+                    type: string
+                  status:
+                    type: string
+
+  # Workflows
+  /workflows:
+    get:
+      summary: List workflows
+      description: Get all configured event workflows
+      tags: [Workflows]
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: List of workflows
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  workflows:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Workflow'
+
+    post:
+      summary: Create workflow
+      description: Create a new event-driven workflow
+      tags: [Workflows]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WorkflowRequest'
+            examples:
+              form_processing:
+                value:
+                  name: "Form Processing Workflow"
+                  description: "Process new form submissions"
+                  trigger:
+                    eventType: "form.submitted"
+                  steps:
+                    - name: "validate"
+                      type: "http"
+                      config:
+                        url: "https://validator.x-form.com/validate"
+                        method: "POST"
+                    - name: "notify"
+                      type: "webhook"
+                      config:
+                        url: "https://notifications.x-form.com/send"
+                    - name: "analytics"
+                      type: "event"
+                      config:
+                        eventType: "analytics.track"
+      responses:
+        '201':
+          description: Workflow created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Workflow'
+
+  /workflows/{workflowId}:
+    get:
+      summary: Get workflow details
+      description: Retrieve detailed information about a workflow
+      tags: [Workflows]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/WorkflowId'
+      responses:
+        '200':
+          description: Workflow details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkflowDetails'
+
+    put:
+      summary: Update workflow
+      description: Update workflow configuration
+      tags: [Workflows]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/WorkflowId'
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WorkflowRequest'
+      responses:
+        '200':
+          description: Workflow updated successfully
+
+    delete:
+      summary: Delete workflow
+      description: Remove a workflow
+      tags: [Workflows]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/WorkflowId'
+      responses:
+        '204':
+          description: Workflow deleted successfully
+
+  /workflows/{workflowId}/executions:
+    get:
+      summary: Get workflow executions
+      description: Retrieve execution history for a workflow
+      tags: [Workflows]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/WorkflowId'
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [running, completed, failed]
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+      responses:
+        '200':
+          description: Workflow executions
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  executions:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/WorkflowExecution'
+
+  # Dead Letter Queue
+  /dead-letters:
+    get:
+      summary: List dead letter events
+      description: Get events that failed processing and are in the dead letter queue
+      tags: [Dead Letter Queue]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: subscription
+          in: query
+          schema:
+            type: string
+        - name: reason
+          in: query
+          schema:
+            type: string
+            enum: [max_retries_exceeded, webhook_timeout, invalid_response]
+      responses:
+        '200':
+          description: Dead letter events
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  events:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/DeadLetterEvent'
+
+  /dead-letters/{eventId}/requeue:
+    post:
+      summary: Requeue dead letter event
+      description: Move an event from dead letter queue back to processing
+      tags: [Dead Letter Queue]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/EventId'
+      responses:
+        '202':
+          description: Event requeued successfully
+
+  # Health and Monitoring
+  /health:
+    get:
+      summary: Health check
+      description: Check the health status of the event bus service
+      tags: [Health]
+      responses:
+        '200':
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthStatus'
+
+  /metrics:
+    get:
+      summary: Service metrics
+      description: Get operational metrics for the event bus
+      tags: [Health]
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Service metrics
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Metrics'
+
+components:
+  schemas:
+    EventPayload:
+      type: object
+      required: [type, source, data]
+      properties:
+        type:
+          type: string
+          description: Event type (dot-separated namespace)
+          example: "form.created"
+        source:
+          type: string
+          description: Source service that generated the event
+          example: "form-service"
+        data:
+          type: object
+          description: Event payload data
+        metadata:
+          type: object
+          description: Additional metadata
+          properties:
+            version:
+              type: string
+            correlationId:
+              type: string
+            causationId:
+              type: string
+            timestamp:
+              type: string
+              format: date-time
+            userId:
+              type: string
+            sessionId:
+              type: string
+
+    Event:
+      type: object
+      properties:
+        id:
+          type: string
+          example: "evt_123456"
+        type:
+          type: string
+          example: "form.created"
+        source:
+          type: string
+          example: "form-service"
+        timestamp:
+          type: string
+          format: date-time
+        status:
+          type: string
+          enum: [pending, delivered, failed, dead_letter]
+        retryCount:
+          type: integer
+          default: 0
+        data:
+          type: object
+        metadata:
+          type: object
+
+    EventDetails:
+      allOf:
+        - $ref: '#/components/schemas/Event'
+        - type: object
+          properties:
+            deliveries:
+              type: array
+              items:
+                $ref: '#/components/schemas/Delivery'
+            errors:
+              type: array
+              items:
+                $ref: '#/components/schemas/EventError'
+
+    Delivery:
+      type: object
+      properties:
+        subscriptionId:
+          type: string
+        endpoint:
+          type: string
+        status:
+          type: string
+          enum: [pending, delivered, failed]
+        attemptedAt:
+          type: string
+          format: date-time
+        deliveredAt:
+          type: string
+          format: date-time
+        responseCode:
+          type: integer
+        responseBody:
+          type: string
+        error:
+          type: string
+
+    SubscriptionRequest:
+      type: object
+      required: [name, endpoint, events]
+      properties:
+        name:
+          type: string
+          minLength: 3
+          maxLength: 100
+        description:
+          type: string
+          maxLength: 500
+        endpoint:
+          type: string
+          format: uri
+          description: Webhook URL to receive events
+        events:
+          type: array
+          items:
+            type: string
+          description: Event types to subscribe to (supports wildcards)
+        filters:
+          type: object
+          description: Additional filters for event matching
+          properties:
+            source:
+              type: array
+              items:
+                type: string
+            metadata:
+              type: object
+        options:
+          $ref: '#/components/schemas/SubscriptionOptions'
+
+    Subscription:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        endpoint:
+          type: string
+        events:
+          type: array
+          items:
+            type: string
+        status:
+          type: string
+          enum: [active, paused, disabled]
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        filters:
+          type: object
+        options:
+          $ref: '#/components/schemas/SubscriptionOptions'
+
+    SubscriptionDetails:
+      allOf:
+        - $ref: '#/components/schemas/Subscription'
+        - type: object
+          properties:
+            statistics:
+              type: object
+              properties:
+                totalEvents:
+                  type: integer
+                successfulDeliveries:
+                  type: integer
+                failedDeliveries:
+                  type: integer
+                averageDeliveryTime:
+                  type: number
+            recentDeliveries:
+              type: array
+              items:
+                $ref: '#/components/schemas/Delivery'
+
+    SubscriptionOptions:
+      type: object
+      properties:
+        retryPolicy:
+          type: object
+          properties:
+            maxRetries:
+              type: integer
+              default: 3
+            backoffMultiplier:
+              type: number
+              default: 2.0
+            maxBackoff:
+              type: integer
+              default: 300
+        timeout:
+          type: integer
+          default: 30
+          description: Request timeout in seconds
+        headers:
+          type: object
+          description: Custom headers to include in webhook requests
+        signature:
+          type: object
+          properties:
+            enabled:
+              type: boolean
+            secret:
+              type: string
+            algorithm:
+              type: string
+              enum: [sha256, sha512]
+
+    EventStream:
+      type: object
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        eventTypes:
+          type: array
+          items:
+            type: string
+        connectionCount:
+          type: integer
+        lastEvent:
+          type: string
+          format: date-time
+
+    WorkflowRequest:
+      type: object
+      required: [name, trigger, steps]
+      properties:
+        name:
+          type: string
+          minLength: 3
+          maxLength: 100
+        description:
+          type: string
+          maxLength: 500
+        trigger:
+          $ref: '#/components/schemas/WorkflowTrigger'
+        steps:
+          type: array
+          items:
+            $ref: '#/components/schemas/WorkflowStep'
+        options:
+          type: object
+          properties:
+            timeout:
+              type: integer
+            retryPolicy:
+              type: object
+
+    Workflow:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        description:
+          type: string
+        status:
+          type: string
+          enum: [active, paused, disabled]
+        trigger:
+          $ref: '#/components/schemas/WorkflowTrigger'
+        steps:
+          type: array
+          items:
+            $ref: '#/components/schemas/WorkflowStep'
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    WorkflowDetails:
+      allOf:
+        - $ref: '#/components/schemas/Workflow'
+        - type: object
+          properties:
+            statistics:
+              type: object
+              properties:
+                totalExecutions:
+                  type: integer
+                successfulExecutions:
+                  type: integer
+                failedExecutions:
+                  type: integer
+                averageExecutionTime:
+                  type: number
+
+    WorkflowTrigger:
+      type: object
+      required: [eventType]
+      properties:
+        eventType:
+          type: string
+        filters:
+          type: object
+
+    WorkflowStep:
+      type: object
+      required: [name, type, config]
+      properties:
+        name:
+          type: string
+        type:
+          type: string
+          enum: [http, webhook, event, delay, condition]
+        config:
+          type: object
+        retryPolicy:
+          type: object
+
+    WorkflowExecution:
+      type: object
+      properties:
+        id:
+          type: string
+        workflowId:
+          type: string
+        triggerEvent:
+          $ref: '#/components/schemas/Event'
+        status:
+          type: string
+          enum: [running, completed, failed, cancelled]
+        startedAt:
+          type: string
+          format: date-time
+        completedAt:
+          type: string
+          format: date-time
+        steps:
+          type: array
+          items:
+            type: object
+            properties:
+              name:
+                type: string
+              status:
+                type: string
+              startedAt:
+                type: string
+                format: date-time
+              completedAt:
+                type: string
+                format: date-time
+              output:
+                type: object
+              error:
+                type: string
+
+    DeadLetterEvent:
+      type: object
+      properties:
+        id:
+          type: string
+        originalEvent:
+          $ref: '#/components/schemas/Event'
+        subscriptionId:
+          type: string
+        reason:
+          type: string
+          enum: [max_retries_exceeded, webhook_timeout, invalid_response]
+        lastError:
+          type: string
+        failedAt:
+          type: string
+          format: date-time
+        retryCount:
+          type: integer
+
+    EventError:
+      type: object
+      properties:
+        timestamp:
+          type: string
+          format: date-time
+        subscriptionId:
+          type: string
+        error:
+          type: string
+        responseCode:
+          type: integer
+        responseBody:
+          type: string
+
+    HealthStatus:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [healthy, degraded, unhealthy]
+        timestamp:
+          type: string
+          format: date-time
+        version:
+          type: string
+        checks:
+          type: object
+          properties:
+            database:
+              type: string
+              enum: [healthy, unhealthy]
+            messageQueue:
+              type: string
+              enum: [healthy, unhealthy]
+            storage:
+              type: string
+              enum: [healthy, unhealthy]
+
+    Metrics:
+      type: object
+      properties:
+        events:
+          type: object
+          properties:
+            published:
+              type: integer
+            delivered:
+              type: integer
+            failed:
+              type: integer
+            inQueue:
+              type: integer
+        subscriptions:
+          type: object
+          properties:
+            active:
+              type: integer
+            paused:
+              type: integer
+            total:
+              type: integer
+        workflows:
+          type: object
+          properties:
+            active:
+              type: integer
+            executing:
+              type: integer
+            completed:
+              type: integer
+        performance:
+          type: object
+          properties:
+            averageProcessingTime:
+              type: number
+            throughput:
+              type: number
+            queueSize:
+              type: integer
+
+    Pagination:
+      type: object
+      properties:
+        offset:
+          type: integer
+        limit:
+          type: integer
+        total:
+          type: integer
+        hasMore:
+          type: boolean
+
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+        message:
+          type: string
+        code:
+          type: string
+        timestamp:
+          type: string
+          format: date-time
+
+  parameters:
+    EventId:
+      name: eventId
+      in: path
+      required: true
+      schema:
+        type: string
+      description: Unique identifier for the event
+
+    SubscriptionId:
+      name: subscriptionId
+      in: path
+      required: true
+      schema:
+        type: string
+      description: Unique identifier for the subscription
+
+    StreamName:
+      name: streamName
+      in: path
+      required: true
+      schema:
+        type: string
+      description: Name of the event stream
+
+    WorkflowId:
+      name: workflowId
+      in: path
+      required: true
+      schema:
+        type: string
+      description: Unique identifier for the workflow
+
+  responses:
+    BadRequest:
+      description: Bad request - invalid input
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+    Unauthorized:
+      description: Unauthorized - authentication required
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+    Forbidden:
+      description: Forbidden - insufficient permissions
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+    InternalServerError:
+      description: Internal server error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT token obtained from auth service
+
+tags:
+  - name: Event Publishing
+    description: Publishing and retrieving events
+  - name: Subscriptions
+    description: Managing event subscriptions and webhooks
+  - name: Event Streams
+    description: Real-time event streaming and replay
+  - name: Workflows
+    description: Event-driven workflow orchestration
+  - name: Dead Letter Queue
+    description: Managing failed event deliveries
+  - name: Health
+    description: Service health and monitoring

@@ -1,0 +1,1290 @@
+openapi: 3.0.3
+info:
+  title: X-Form Analytics Service API
+  description: |
+    Advanced analytics and reporting service for X-Form Backend providing
+    data insights, visualization, reporting, and business intelligence capabilities.
+    
+    ## Features
+    - Form performance analytics
+    - Response data analysis
+    - Custom dashboard creation
+    - Automated reporting
+    - Data visualization
+    - Trend analysis
+    - Export capabilities
+    
+  version: 1.0.0
+  contact:
+    name: X-Form Team
+    email: support@x-form.com
+    url: https://docs.x-form.com
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+
+servers:
+  - url: http://localhost:5001
+    description: Development server
+  - url: https://analytics.x-form.com
+    description: Production server
+  - url: https://staging-analytics.x-form.com
+    description: Staging server
+
+paths:
+  # Dashboard Management
+  /dashboards:
+    get:
+      summary: List dashboards
+      description: Get all dashboards accessible to the user
+      tags: [Dashboard Management]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: type
+          in: query
+          schema:
+            type: string
+            enum: [personal, shared, public]
+        - name: category
+          in: query
+          schema:
+            type: string
+            enum: [forms, responses, users, performance]
+      responses:
+        '200':
+          description: List of dashboards
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  dashboards:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Dashboard'
+              examples:
+                dashboards:
+                  value:
+                    dashboards:
+                      - id: "dash_123"
+                        name: "Form Performance Overview"
+                        type: "shared"
+                        category: "forms"
+                        widgets: 6
+                        lastUpdated: "2024-01-15T10:30:00Z"
+                        owner: "user_456"
+
+    post:
+      summary: Create dashboard
+      description: Create a new analytics dashboard
+      tags: [Dashboard Management]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DashboardRequest'
+            examples:
+              form_dashboard:
+                value:
+                  name: "Customer Feedback Analytics"
+                  description: "Analytics for customer feedback forms"
+                  type: "personal"
+                  category: "forms"
+                  widgets:
+                    - type: "metric"
+                      title: "Total Responses"
+                      config:
+                        metric: "response_count"
+                        filters:
+                          formId: "form_123"
+                    - type: "chart"
+                      title: "Responses Over Time"
+                      config:
+                        chartType: "line"
+                        metric: "response_count"
+                        timeframe: "30d"
+      responses:
+        '201':
+          description: Dashboard created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Dashboard'
+
+  /dashboards/{dashboardId}:
+    get:
+      summary: Get dashboard
+      description: Retrieve dashboard configuration and data
+      tags: [Dashboard Management]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/DashboardId'
+        - name: includeData
+          in: query
+          schema:
+            type: boolean
+            default: true
+      responses:
+        '200':
+          description: Dashboard details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DashboardDetails'
+
+    put:
+      summary: Update dashboard
+      description: Update dashboard configuration
+      tags: [Dashboard Management]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/DashboardId'
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DashboardRequest'
+      responses:
+        '200':
+          description: Dashboard updated successfully
+
+    delete:
+      summary: Delete dashboard
+      description: Delete a dashboard
+      tags: [Dashboard Management]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/DashboardId'
+      responses:
+        '204':
+          description: Dashboard deleted successfully
+
+  # Analytics Queries
+  /analytics/forms:
+    get:
+      summary: Get form analytics
+      description: Retrieve analytics data for forms
+      tags: [Form Analytics]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: formId
+          in: query
+          schema:
+            type: string
+        - name: metric
+          in: query
+          schema:
+            type: string
+            enum: [views, responses, completion_rate, conversion_rate, average_time]
+        - name: timeframe
+          in: query
+          schema:
+            type: string
+            enum: [1d, 7d, 30d, 90d, 1y]
+            default: 30d
+        - name: groupBy
+          in: query
+          schema:
+            type: string
+            enum: [hour, day, week, month]
+            default: day
+      responses:
+        '200':
+          description: Form analytics data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FormAnalytics'
+
+  /analytics/forms/{formId}/funnel:
+    get:
+      summary: Get form funnel analysis
+      description: Analyze form completion funnel and drop-off points
+      tags: [Form Analytics]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/FormId'
+        - name: timeframe
+          in: query
+          schema:
+            type: string
+            enum: [7d, 30d, 90d]
+            default: 30d
+      responses:
+        '200':
+          description: Funnel analysis data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FunnelAnalysis'
+
+  /analytics/forms/{formId}/heatmap:
+    get:
+      summary: Get form heatmap data
+      description: Get user interaction heatmap data for a form
+      tags: [Form Analytics]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/FormId'
+        - name: type
+          in: query
+          schema:
+            type: string
+            enum: [clicks, scrolls, time_spent]
+            default: clicks
+      responses:
+        '200':
+          description: Heatmap data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HeatmapData'
+
+  # Response Analytics
+  /analytics/responses:
+    get:
+      summary: Get response analytics
+      description: Retrieve analytics data for form responses
+      tags: [Response Analytics]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: formId
+          in: query
+          schema:
+            type: string
+        - name: metric
+          in: query
+          schema:
+            type: string
+            enum: [count, completion_time, field_completion, validation_errors]
+        - name: timeframe
+          in: query
+          schema:
+            type: string
+            enum: [1d, 7d, 30d, 90d]
+            default: 30d
+        - name: segment
+          in: query
+          schema:
+            type: string
+          description: Segment responses by field value
+      responses:
+        '200':
+          description: Response analytics data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseAnalytics'
+
+  /analytics/responses/patterns:
+    get:
+      summary: Analyze response patterns
+      description: Identify patterns and trends in response data
+      tags: [Response Analytics]
+      security:
+        - bearerAuth: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                formIds:
+                  type: array
+                  items:
+                    type: string
+                analysisType:
+                  type: string
+                  enum: [correlation, clustering, anomaly_detection]
+                timeframe:
+                  type: string
+                  enum: [7d, 30d, 90d]
+                parameters:
+                  type: object
+      responses:
+        '200':
+          description: Pattern analysis results
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PatternAnalysis'
+
+  # User Analytics
+  /analytics/users:
+    get:
+      summary: Get user analytics
+      description: Retrieve analytics data about users and their behavior
+      tags: [User Analytics]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: metric
+          in: query
+          schema:
+            type: string
+            enum: [active_users, new_users, retention, engagement]
+        - name: timeframe
+          in: query
+          schema:
+            type: string
+            enum: [1d, 7d, 30d, 90d]
+            default: 30d
+      responses:
+        '200':
+          description: User analytics data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserAnalytics'
+
+  /analytics/users/cohorts:
+    get:
+      summary: Get cohort analysis
+      description: Analyze user cohorts and retention patterns
+      tags: [User Analytics]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: cohortType
+          in: query
+          schema:
+            type: string
+            enum: [registration, first_form, first_response]
+            default: registration
+        - name: period
+          in: query
+          schema:
+            type: string
+            enum: [daily, weekly, monthly]
+            default: weekly
+      responses:
+        '200':
+          description: Cohort analysis data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CohortAnalysis'
+
+  # Custom Reports
+  /reports:
+    get:
+      summary: List reports
+      description: Get all available reports
+      tags: [Reports]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: type
+          in: query
+          schema:
+            type: string
+            enum: [scheduled, custom, template]
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [active, paused, completed]
+      responses:
+        '200':
+          description: List of reports
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  reports:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Report'
+
+    post:
+      summary: Create report
+      description: Create a new custom report
+      tags: [Reports]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReportRequest'
+            examples:
+              monthly_report:
+                value:
+                  name: "Monthly Form Performance Report"
+                  description: "Comprehensive monthly performance analysis"
+                  type: "scheduled"
+                  schedule:
+                    frequency: "monthly"
+                    dayOfMonth: 1
+                    time: "09:00"
+                  config:
+                    formIds: ["form_123", "form_456"]
+                    metrics: ["responses", "completion_rate", "conversion_rate"]
+                    includeCharts: true
+                    format: "pdf"
+                  recipients:
+                    - "admin@company.com"
+                    - "analytics@company.com"
+      responses:
+        '201':
+          description: Report created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Report'
+
+  /reports/{reportId}:
+    get:
+      summary: Get report
+      description: Retrieve report configuration and generated files
+      tags: [Reports]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/ReportId'
+      responses:
+        '200':
+          description: Report details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReportDetails'
+
+    put:
+      summary: Update report
+      description: Update report configuration
+      tags: [Reports]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/ReportId'
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReportRequest'
+      responses:
+        '200':
+          description: Report updated successfully
+
+    delete:
+      summary: Delete report
+      description: Delete a report and its generated files
+      tags: [Reports]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/ReportId'
+      responses:
+        '204':
+          description: Report deleted successfully
+
+  /reports/{reportId}/generate:
+    post:
+      summary: Generate report
+      description: Manually trigger report generation
+      tags: [Reports]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/ReportId'
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                parameters:
+                  type: object
+                  description: Override report parameters
+      responses:
+        '202':
+          description: Report generation started
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  jobId:
+                    type: string
+                  status:
+                    type: string
+
+  /reports/{reportId}/download/{fileId}:
+    get:
+      summary: Download report file
+      description: Download a generated report file
+      tags: [Reports]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/ReportId'
+        - $ref: '#/components/parameters/FileId'
+      responses:
+        '200':
+          description: Report file
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+              schema:
+                type: string
+                format: binary
+
+  # Data Export
+  /export/data:
+    post:
+      summary: Export analytics data
+      description: Export raw or processed analytics data
+      tags: [Data Export]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DataExportRequest'
+            examples:
+              csv_export:
+                value:
+                  dataType: "responses"
+                  filters:
+                    formIds: ["form_123"]
+                    timeframe: "30d"
+                  format: "csv"
+                  aggregation:
+                    groupBy: "day"
+                    metrics: ["count", "completion_rate"]
+      responses:
+        '202':
+          description: Export job started
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  exportId:
+                    type: string
+                  status:
+                    type: string
+
+  /export/{exportId}:
+    get:
+      summary: Get export status
+      description: Check the status of a data export
+      tags: [Data Export]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/ExportId'
+      responses:
+        '200':
+          description: Export status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExportStatus'
+
+  /export/{exportId}/download:
+    get:
+      summary: Download export file
+      description: Download the exported data file
+      tags: [Data Export]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/ExportId'
+      responses:
+        '200':
+          description: Export file
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+
+  # Real-time Analytics
+  /analytics/realtime:
+    get:
+      summary: Get real-time metrics
+      description: Get real-time analytics metrics
+      tags: [Real-time Analytics]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: metrics
+          in: query
+          schema:
+            type: array
+            items:
+              type: string
+          description: Comma-separated list of metrics
+      responses:
+        '200':
+          description: Real-time metrics
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RealtimeMetrics'
+
+  /analytics/alerts:
+    get:
+      summary: List analytics alerts
+      description: Get configured analytics alerts
+      tags: [Real-time Analytics]
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: List of alerts
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  alerts:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Alert'
+
+    post:
+      summary: Create analytics alert
+      description: Create a new analytics alert
+      tags: [Real-time Analytics]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AlertRequest'
+      responses:
+        '201':
+          description: Alert created successfully
+
+  # Health Check
+  /health:
+    get:
+      summary: Health check
+      description: Check the health status of the analytics service
+      tags: [Health]
+      responses:
+        '200':
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthStatus'
+
+components:
+  schemas:
+    Dashboard:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        description:
+          type: string
+        type:
+          type: string
+          enum: [personal, shared, public]
+        category:
+          type: string
+          enum: [forms, responses, users, performance]
+        owner:
+          type: string
+        widgets:
+          type: integer
+        createdAt:
+          type: string
+          format: date-time
+        lastUpdated:
+          type: string
+          format: date-time
+
+    DashboardDetails:
+      allOf:
+        - $ref: '#/components/schemas/Dashboard'
+        - type: object
+          properties:
+            widgets:
+              type: array
+              items:
+                $ref: '#/components/schemas/Widget'
+            permissions:
+              type: object
+            data:
+              type: object
+
+    DashboardRequest:
+      type: object
+      required: [name, type, widgets]
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        type:
+          type: string
+          enum: [personal, shared, public]
+        category:
+          type: string
+        widgets:
+          type: array
+          items:
+            $ref: '#/components/schemas/WidgetConfig'
+        permissions:
+          type: object
+
+    Widget:
+      type: object
+      properties:
+        id:
+          type: string
+        type:
+          type: string
+          enum: [metric, chart, table, heatmap, funnel]
+        title:
+          type: string
+        position:
+          type: object
+          properties:
+            x:
+              type: integer
+            y:
+              type: integer
+            width:
+              type: integer
+            height:
+              type: integer
+        config:
+          $ref: '#/components/schemas/WidgetConfig'
+        data:
+          type: object
+
+    WidgetConfig:
+      type: object
+      properties:
+        type:
+          type: string
+          enum: [metric, chart, table, heatmap, funnel]
+        title:
+          type: string
+        metric:
+          type: string
+        chartType:
+          type: string
+          enum: [line, bar, pie, area, scatter]
+        timeframe:
+          type: string
+        filters:
+          type: object
+        aggregation:
+          type: object
+
+    FormAnalytics:
+      type: object
+      properties:
+        formId:
+          type: string
+        period:
+          type: object
+          properties:
+            from:
+              type: string
+              format: date-time
+            to:
+              type: string
+              format: date-time
+        metrics:
+          type: object
+          properties:
+            views:
+              type: integer
+            responses:
+              type: integer
+            completionRate:
+              type: number
+            conversionRate:
+              type: number
+            averageTime:
+              type: number
+        timeSeries:
+          type: array
+          items:
+            type: object
+            properties:
+              timestamp:
+                type: string
+                format: date-time
+              views:
+                type: integer
+              responses:
+                type: integer
+
+    FunnelAnalysis:
+      type: object
+      properties:
+        formId:
+          type: string
+        steps:
+          type: array
+          items:
+            type: object
+            properties:
+              step:
+                type: string
+              users:
+                type: integer
+              dropoffRate:
+                type: number
+              conversionRate:
+                type: number
+        insights:
+          type: array
+          items:
+            type: string
+
+    HeatmapData:
+      type: object
+      properties:
+        formId:
+          type: string
+        type:
+          type: string
+        data:
+          type: array
+          items:
+            type: object
+            properties:
+              elementId:
+                type: string
+              x:
+                type: number
+              y:
+                type: number
+              value:
+                type: number
+              intensity:
+                type: number
+
+    ResponseAnalytics:
+      type: object
+      properties:
+        summary:
+          type: object
+          properties:
+            totalResponses:
+              type: integer
+            averageCompletionTime:
+              type: number
+            fieldCompletionRates:
+              type: object
+            validationErrors:
+              type: integer
+        trends:
+          type: array
+          items:
+            type: object
+        segmentation:
+          type: object
+
+    PatternAnalysis:
+      type: object
+      properties:
+        analysisType:
+          type: string
+        results:
+          type: object
+        insights:
+          type: array
+          items:
+            type: string
+        confidence:
+          type: number
+        recommendations:
+          type: array
+          items:
+            type: string
+
+    UserAnalytics:
+      type: object
+      properties:
+        period:
+          type: object
+        metrics:
+          type: object
+          properties:
+            activeUsers:
+              type: integer
+            newUsers:
+              type: integer
+            returningUsers:
+              type: integer
+            averageSessionDuration:
+              type: number
+        demographics:
+          type: object
+        behavior:
+          type: object
+
+    CohortAnalysis:
+      type: object
+      properties:
+        cohortType:
+          type: string
+        period:
+          type: string
+        cohorts:
+          type: array
+          items:
+            type: object
+            properties:
+              cohortDate:
+                type: string
+                format: date
+              size:
+                type: integer
+              retention:
+                type: array
+                items:
+                  type: number
+
+    Report:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        description:
+          type: string
+        type:
+          type: string
+          enum: [scheduled, custom, template]
+        status:
+          type: string
+          enum: [active, paused, completed]
+        createdAt:
+          type: string
+          format: date-time
+        lastGenerated:
+          type: string
+          format: date-time
+        nextGeneration:
+          type: string
+          format: date-time
+
+    ReportDetails:
+      allOf:
+        - $ref: '#/components/schemas/Report'
+        - type: object
+          properties:
+            config:
+              type: object
+            schedule:
+              type: object
+            files:
+              type: array
+              items:
+                type: object
+                properties:
+                  id:
+                    type: string
+                  name:
+                    type: string
+                  format:
+                    type: string
+                  size:
+                    type: integer
+                  generatedAt:
+                    type: string
+                    format: date-time
+
+    ReportRequest:
+      type: object
+      required: [name, type, config]
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        type:
+          type: string
+          enum: [scheduled, custom, template]
+        schedule:
+          type: object
+          properties:
+            frequency:
+              type: string
+              enum: [daily, weekly, monthly]
+            time:
+              type: string
+            dayOfWeek:
+              type: integer
+            dayOfMonth:
+              type: integer
+        config:
+          type: object
+        recipients:
+          type: array
+          items:
+            type: string
+
+    DataExportRequest:
+      type: object
+      required: [dataType, format]
+      properties:
+        dataType:
+          type: string
+          enum: [forms, responses, users, events]
+        filters:
+          type: object
+        format:
+          type: string
+          enum: [csv, json, excel, parquet]
+        aggregation:
+          type: object
+        compression:
+          type: string
+          enum: [none, gzip, zip]
+
+    ExportStatus:
+      type: object
+      properties:
+        id:
+          type: string
+        status:
+          type: string
+          enum: [pending, processing, completed, failed]
+        progress:
+          type: number
+        createdAt:
+          type: string
+          format: date-time
+        completedAt:
+          type: string
+          format: date-time
+        downloadUrl:
+          type: string
+        fileSize:
+          type: integer
+        recordCount:
+          type: integer
+
+    RealtimeMetrics:
+      type: object
+      properties:
+        timestamp:
+          type: string
+          format: date-time
+        metrics:
+          type: object
+          properties:
+            activeUsers:
+              type: integer
+            responsesPerMinute:
+              type: number
+            formsViewed:
+              type: integer
+            errorRate:
+              type: number
+
+    Alert:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        metric:
+          type: string
+        condition:
+          type: object
+          properties:
+            operator:
+              type: string
+              enum: [gt, lt, eq, gte, lte]
+            value:
+              type: number
+        actions:
+          type: array
+          items:
+            type: object
+        status:
+          type: string
+          enum: [active, paused]
+
+    AlertRequest:
+      type: object
+      required: [name, metric, condition, actions]
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        metric:
+          type: string
+        condition:
+          type: object
+        actions:
+          type: array
+          items:
+            type: object
+        filters:
+          type: object
+
+    HealthStatus:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [healthy, degraded, unhealthy]
+        timestamp:
+          type: string
+          format: date-time
+        version:
+          type: string
+        dependencies:
+          type: object
+          properties:
+            database:
+              type: string
+            bigquery:
+              type: string
+            storage:
+              type: string
+
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+        message:
+          type: string
+        code:
+          type: string
+        timestamp:
+          type: string
+          format: date-time
+
+  parameters:
+    DashboardId:
+      name: dashboardId
+      in: path
+      required: true
+      schema:
+        type: string
+      description: Unique identifier for the dashboard
+
+    FormId:
+      name: formId
+      in: path
+      required: true
+      schema:
+        type: string
+      description: Unique identifier for the form
+
+    ReportId:
+      name: reportId
+      in: path
+      required: true
+      schema:
+        type: string
+      description: Unique identifier for the report
+
+    FileId:
+      name: fileId
+      in: path
+      required: true
+      schema:
+        type: string
+      description: Unique identifier for the file
+
+    ExportId:
+      name: exportId
+      in: path
+      required: true
+      schema:
+        type: string
+      description: Unique identifier for the export
+
+  responses:
+    BadRequest:
+      description: Bad request - invalid input
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+    Unauthorized:
+      description: Unauthorized - authentication required
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+    Forbidden:
+      description: Forbidden - insufficient permissions
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+    InternalServerError:
+      description: Internal server error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT token obtained from auth service
+
+tags:
+  - name: Dashboard Management
+    description: Creating and managing analytics dashboards
+  - name: Form Analytics
+    description: Form performance and usage analytics
+  - name: Response Analytics
+    description: Response data analysis and insights
+  - name: User Analytics
+    description: User behavior and engagement analytics
+  - name: Reports
+    description: Custom report generation and scheduling
+  - name: Data Export
+    description: Exporting analytics data
+  - name: Real-time Analytics
+    description: Real-time metrics and alerts
+  - name: Health
+    description: Service health monitoring

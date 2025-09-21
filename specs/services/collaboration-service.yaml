@@ -1,0 +1,1025 @@
+openapi: 3.0.3
+info:
+  title: X-Form Collaboration Service API
+  description: |
+    Real-time collaboration service for X-Form Backend providing team collaboration,
+    document sharing, real-time editing, and communication features.
+    
+    ## Features
+    - Real-time collaborative editing
+    - Team workspace management
+    - Document version control
+    - Comment and annotation system
+    - Presence indicators
+    - Change notifications
+    
+  version: 1.0.0
+  contact:
+    name: X-Form Team
+    email: support@x-form.com
+    url: https://docs.x-form.com
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+
+servers:
+  - url: http://localhost:3003
+    description: Development server
+  - url: https://collaboration.x-form.com
+    description: Production server
+  - url: https://staging-collaboration.x-form.com
+    description: Staging server
+
+paths:
+  # Workspace Management
+  /workspaces:
+    get:
+      summary: List user workspaces
+      description: Retrieve all workspaces accessible to the authenticated user
+      tags: [Workspace Management]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+            maximum: 100
+        - name: search
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: List of workspaces
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  workspaces:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Workspace'
+                  pagination:
+                    $ref: '#/components/schemas/Pagination'
+              examples:
+                success:
+                  value:
+                    workspaces:
+                      - id: "ws_123"
+                        name: "Product Team Workspace"
+                        description: "Collaboration space for product team"
+                        memberCount: 8
+                        createdAt: "2024-01-15T10:30:00Z"
+                        role: "owner"
+                    pagination:
+                      page: 1
+                      limit: 20
+                      total: 1
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+    post:
+      summary: Create new workspace
+      description: Create a new collaboration workspace
+      tags: [Workspace Management]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name:
+                  type: string
+                  minLength: 3
+                  maxLength: 100
+                description:
+                  type: string
+                  maxLength: 500
+                settings:
+                  $ref: '#/components/schemas/WorkspaceSettings'
+            examples:
+              create_workspace:
+                value:
+                  name: "Marketing Team Workspace"
+                  description: "Collaboration space for marketing campaigns"
+                  settings:
+                    public: false
+                    allowGuests: true
+                    maxMembers: 50
+      responses:
+        '201':
+          description: Workspace created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Workspace'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /workspaces/{workspaceId}:
+    get:
+      summary: Get workspace details
+      description: Retrieve detailed information about a specific workspace
+      tags: [Workspace Management]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+      responses:
+        '200':
+          description: Workspace details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkspaceDetails'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    put:
+      summary: Update workspace
+      description: Update workspace information and settings
+      tags: [Workspace Management]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                  minLength: 3
+                  maxLength: 100
+                description:
+                  type: string
+                  maxLength: 500
+                settings:
+                  $ref: '#/components/schemas/WorkspaceSettings'
+      responses:
+        '200':
+          description: Workspace updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Workspace'
+
+    delete:
+      summary: Delete workspace
+      description: Permanently delete a workspace and all its data
+      tags: [Workspace Management]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+      responses:
+        '204':
+          description: Workspace deleted successfully
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  # Document Collaboration
+  /workspaces/{workspaceId}/documents:
+    get:
+      summary: List workspace documents
+      description: Retrieve all documents in a workspace
+      tags: [Document Collaboration]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+        - name: type
+          in: query
+          schema:
+            type: string
+            enum: [form, template, draft]
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [active, archived, shared]
+      responses:
+        '200':
+          description: List of documents
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  documents:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Document'
+
+    post:
+      summary: Create document
+      description: Create a new collaborative document
+      tags: [Document Collaboration]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [title, type]
+              properties:
+                title:
+                  type: string
+                  minLength: 1
+                  maxLength: 200
+                type:
+                  type: string
+                  enum: [form, template, draft]
+                content:
+                  type: object
+                permissions:
+                  $ref: '#/components/schemas/DocumentPermissions'
+      responses:
+        '201':
+          description: Document created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Document'
+
+  /workspaces/{workspaceId}/documents/{documentId}:
+    get:
+      summary: Get document
+      description: Retrieve document content and metadata
+      tags: [Document Collaboration]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+        - $ref: '#/components/parameters/DocumentId'
+      responses:
+        '200':
+          description: Document details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DocumentDetails'
+
+    put:
+      summary: Update document
+      description: Update document content with conflict resolution
+      tags: [Document Collaboration]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+        - $ref: '#/components/parameters/DocumentId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [content, version]
+              properties:
+                content:
+                  type: object
+                version:
+                  type: integer
+                  description: Current version for conflict detection
+                changes:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/DocumentChange'
+      responses:
+        '200':
+          description: Document updated successfully
+        '409':
+          description: Version conflict - document has been modified
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                  currentVersion:
+                    type: integer
+                  conflicts:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Conflict'
+
+  # Real-time Collaboration
+  /workspaces/{workspaceId}/documents/{documentId}/session:
+    post:
+      summary: Join collaboration session
+      description: Join a real-time collaboration session for a document
+      tags: [Real-time Collaboration]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+        - $ref: '#/components/parameters/DocumentId'
+      responses:
+        '200':
+          description: Session joined successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  sessionId:
+                    type: string
+                  websocketUrl:
+                    type: string
+                  participants:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Participant'
+
+  /workspaces/{workspaceId}/documents/{documentId}/presence:
+    get:
+      summary: Get active participants
+      description: Get list of users currently viewing/editing the document
+      tags: [Real-time Collaboration]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+        - $ref: '#/components/parameters/DocumentId'
+      responses:
+        '200':
+          description: Active participants
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  participants:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Participant'
+
+  # Comments and Annotations
+  /workspaces/{workspaceId}/documents/{documentId}/comments:
+    get:
+      summary: Get document comments
+      description: Retrieve all comments and annotations for a document
+      tags: [Comments]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+        - $ref: '#/components/parameters/DocumentId'
+        - name: resolved
+          in: query
+          schema:
+            type: boolean
+      responses:
+        '200':
+          description: Document comments
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  comments:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Comment'
+
+    post:
+      summary: Add comment
+      description: Add a new comment or annotation to the document
+      tags: [Comments]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+        - $ref: '#/components/parameters/DocumentId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [content]
+              properties:
+                content:
+                  type: string
+                  minLength: 1
+                  maxLength: 1000
+                position:
+                  $ref: '#/components/schemas/Position'
+                type:
+                  type: string
+                  enum: [comment, suggestion, approval]
+                parentId:
+                  type: string
+                  description: Reply to another comment
+      responses:
+        '201':
+          description: Comment created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Comment'
+
+  /workspaces/{workspaceId}/documents/{documentId}/comments/{commentId}:
+    put:
+      summary: Update comment
+      description: Update an existing comment
+      tags: [Comments]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+        - $ref: '#/components/parameters/DocumentId'
+        - $ref: '#/components/parameters/CommentId'
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                content:
+                  type: string
+                resolved:
+                  type: boolean
+      responses:
+        '200':
+          description: Comment updated successfully
+
+    delete:
+      summary: Delete comment
+      description: Delete a comment
+      tags: [Comments]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+        - $ref: '#/components/parameters/DocumentId'
+        - $ref: '#/components/parameters/CommentId'
+      responses:
+        '204':
+          description: Comment deleted successfully
+
+  # Team Management
+  /workspaces/{workspaceId}/members:
+    get:
+      summary: List workspace members
+      description: Get all members of a workspace
+      tags: [Team Management]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+      responses:
+        '200':
+          description: Workspace members
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  members:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Member'
+
+    post:
+      summary: Invite member
+      description: Invite a new member to the workspace
+      tags: [Team Management]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, role]
+              properties:
+                email:
+                  type: string
+                  format: email
+                role:
+                  type: string
+                  enum: [viewer, editor, admin, owner]
+                message:
+                  type: string
+                  maxLength: 500
+      responses:
+        '201':
+          description: Invitation sent successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Invitation'
+
+  /workspaces/{workspaceId}/members/{userId}:
+    put:
+      summary: Update member role
+      description: Update a member's role in the workspace
+      tags: [Team Management]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+        - $ref: '#/components/parameters/UserId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [role]
+              properties:
+                role:
+                  type: string
+                  enum: [viewer, editor, admin, owner]
+      responses:
+        '200':
+          description: Member role updated successfully
+
+    delete:
+      summary: Remove member
+      description: Remove a member from the workspace
+      tags: [Team Management]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+        - $ref: '#/components/parameters/UserId'
+      responses:
+        '204':
+          description: Member removed successfully
+
+components:
+  schemas:
+    Workspace:
+      type: object
+      properties:
+        id:
+          type: string
+          example: "ws_123"
+        name:
+          type: string
+          example: "Product Team Workspace"
+        description:
+          type: string
+          example: "Collaboration space for product team"
+        memberCount:
+          type: integer
+          example: 8
+        documentCount:
+          type: integer
+          example: 15
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        role:
+          type: string
+          enum: [viewer, editor, admin, owner]
+        settings:
+          $ref: '#/components/schemas/WorkspaceSettings'
+
+    WorkspaceDetails:
+      allOf:
+        - $ref: '#/components/schemas/Workspace'
+        - type: object
+          properties:
+            members:
+              type: array
+              items:
+                $ref: '#/components/schemas/Member'
+            recentActivity:
+              type: array
+              items:
+                $ref: '#/components/schemas/Activity'
+
+    WorkspaceSettings:
+      type: object
+      properties:
+        public:
+          type: boolean
+          default: false
+        allowGuests:
+          type: boolean
+          default: false
+        maxMembers:
+          type: integer
+          default: 100
+        permissions:
+          type: object
+          properties:
+            canCreateDocuments:
+              type: array
+              items:
+                type: string
+                enum: [viewer, editor, admin, owner]
+            canInviteMembers:
+              type: array
+              items:
+                type: string
+                enum: [editor, admin, owner]
+
+    Document:
+      type: object
+      properties:
+        id:
+          type: string
+          example: "doc_456"
+        title:
+          type: string
+          example: "User Registration Form"
+        type:
+          type: string
+          enum: [form, template, draft]
+        status:
+          type: string
+          enum: [active, archived, shared]
+        version:
+          type: integer
+          example: 5
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        createdBy:
+          $ref: '#/components/schemas/User'
+        lastModifiedBy:
+          $ref: '#/components/schemas/User'
+        permissions:
+          $ref: '#/components/schemas/DocumentPermissions'
+
+    DocumentDetails:
+      allOf:
+        - $ref: '#/components/schemas/Document'
+        - type: object
+          properties:
+            content:
+              type: object
+              description: Document content (form definition, template, etc.)
+            collaborators:
+              type: array
+              items:
+                $ref: '#/components/schemas/User'
+            history:
+              type: array
+              items:
+                $ref: '#/components/schemas/DocumentChange'
+
+    DocumentPermissions:
+      type: object
+      properties:
+        read:
+          type: array
+          items:
+            type: string
+        write:
+          type: array
+          items:
+            type: string
+        admin:
+          type: array
+          items:
+            type: string
+        public:
+          type: boolean
+          default: false
+
+    DocumentChange:
+      type: object
+      properties:
+        id:
+          type: string
+        type:
+          type: string
+          enum: [insert, delete, modify, move]
+        path:
+          type: string
+          description: JSON path to the changed element
+        oldValue:
+          type: object
+        newValue:
+          type: object
+        timestamp:
+          type: string
+          format: date-time
+        userId:
+          type: string
+
+    Conflict:
+      type: object
+      properties:
+        path:
+          type: string
+        localChange:
+          $ref: '#/components/schemas/DocumentChange'
+        remoteChange:
+          $ref: '#/components/schemas/DocumentChange'
+        resolution:
+          type: string
+          enum: [auto, manual]
+
+    Participant:
+      type: object
+      properties:
+        userId:
+          type: string
+        name:
+          type: string
+        avatar:
+          type: string
+        cursor:
+          $ref: '#/components/schemas/Position'
+        selection:
+          $ref: '#/components/schemas/Selection'
+        status:
+          type: string
+          enum: [active, idle, editing]
+        joinedAt:
+          type: string
+          format: date-time
+
+    Position:
+      type: object
+      properties:
+        x:
+          type: number
+        y:
+          type: number
+        elementId:
+          type: string
+
+    Selection:
+      type: object
+      properties:
+        start:
+          $ref: '#/components/schemas/Position'
+        end:
+          $ref: '#/components/schemas/Position'
+
+    Comment:
+      type: object
+      properties:
+        id:
+          type: string
+        content:
+          type: string
+        position:
+          $ref: '#/components/schemas/Position'
+        type:
+          type: string
+          enum: [comment, suggestion, approval]
+        resolved:
+          type: boolean
+          default: false
+        createdAt:
+          type: string
+          format: date-time
+        createdBy:
+          $ref: '#/components/schemas/User'
+        replies:
+          type: array
+          items:
+            $ref: '#/components/schemas/Comment'
+
+    Member:
+      type: object
+      properties:
+        userId:
+          type: string
+        name:
+          type: string
+        email:
+          type: string
+        avatar:
+          type: string
+        role:
+          type: string
+          enum: [viewer, editor, admin, owner]
+        joinedAt:
+          type: string
+          format: date-time
+        lastActive:
+          type: string
+          format: date-time
+        status:
+          type: string
+          enum: [active, inactive, invited]
+
+    Invitation:
+      type: object
+      properties:
+        id:
+          type: string
+        email:
+          type: string
+        role:
+          type: string
+        status:
+          type: string
+          enum: [pending, accepted, declined, expired]
+        invitedBy:
+          $ref: '#/components/schemas/User'
+        invitedAt:
+          type: string
+          format: date-time
+        expiresAt:
+          type: string
+          format: date-time
+
+    User:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        email:
+          type: string
+        avatar:
+          type: string
+
+    Activity:
+      type: object
+      properties:
+        id:
+          type: string
+        type:
+          type: string
+          enum: [document_created, document_updated, member_joined, comment_added]
+        description:
+          type: string
+        userId:
+          type: string
+        userName:
+          type: string
+        timestamp:
+          type: string
+          format: date-time
+        metadata:
+          type: object
+
+    Pagination:
+      type: object
+      properties:
+        page:
+          type: integer
+        limit:
+          type: integer
+        total:
+          type: integer
+        hasNext:
+          type: boolean
+        hasPrev:
+          type: boolean
+
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+        message:
+          type: string
+        code:
+          type: string
+        timestamp:
+          type: string
+          format: date-time
+
+  parameters:
+    WorkspaceId:
+      name: workspaceId
+      in: path
+      required: true
+      schema:
+        type: string
+      description: Unique identifier for the workspace
+
+    DocumentId:
+      name: documentId
+      in: path
+      required: true
+      schema:
+        type: string
+      description: Unique identifier for the document
+
+    CommentId:
+      name: commentId
+      in: path
+      required: true
+      schema:
+        type: string
+      description: Unique identifier for the comment
+
+    UserId:
+      name: userId
+      in: path
+      required: true
+      schema:
+        type: string
+      description: Unique identifier for the user
+
+  responses:
+    BadRequest:
+      description: Bad request - invalid input
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          examples:
+            validation_error:
+              value:
+                error: "Validation Error"
+                message: "Invalid input data"
+                code: "VALIDATION_ERROR"
+
+    Unauthorized:
+      description: Unauthorized - authentication required
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          examples:
+            missing_token:
+              value:
+                error: "Unauthorized"
+                message: "Authentication token required"
+                code: "AUTH_REQUIRED"
+
+    Forbidden:
+      description: Forbidden - insufficient permissions
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          examples:
+            workspace_not_found:
+              value:
+                error: "Not Found"
+                message: "Workspace not found"
+                code: "WORKSPACE_NOT_FOUND"
+
+    InternalServerError:
+      description: Internal server error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT token obtained from auth service
+
+tags:
+  - name: Workspace Management
+    description: Operations for managing collaboration workspaces
+  - name: Document Collaboration
+    description: Document creation, editing, and versioning
+  - name: Real-time Collaboration
+    description: Real-time collaboration features and presence
+  - name: Comments
+    description: Comments, annotations, and discussions
+  - name: Team Management
+    description: Managing workspace members and invitations
