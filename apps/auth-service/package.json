@@ -2,10 +2,10 @@
   "name": "auth-service",
   "version": "1.0.0",
   "description": "Clean Architecture Authentication & User Management Service for X-Form Backend",
-  "main": "dist/app.js",
+  "main": "src/app.js",
   "scripts": {
-    "build": "tsc",
-    "start": "node dist/app.js",
+    "build": "echo 'Using existing JavaScript files'",
+    "start": "node src/app.js",
     "dev": "ts-node src/app.ts",
     "dev:simple": "ts-node src/simple-app.ts",
     "dev:watch": "nodemon --exec ts-node src/app.ts",

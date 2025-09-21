@@ -16,7 +16,7 @@ RUN addgroup -g 1001 -S nodejs && \
 # Copy package files
 COPY package*.json ./
 
-# Install dependencies with clean cache
+# Install dependencies (production only since we're using existing JS files)
 RUN npm ci --only=production && \
     npm cache clean --force
 
@@ -25,6 +25,8 @@ COPY src/ ./src/
 COPY server.js ./
 COPY schema.sql ./
 COPY .env.example ./
+
+# No build step needed - using existing JavaScript files
 
 # Create necessary directories
 RUN mkdir -p logs temp && \
