@@ -1,0 +1,902 @@
+openapi: 3.0.3
+info:
+  title: X-Form Form Service API
+  version: 1.0.0
+  description: |
+    # Form Management Service
+    
+    Comprehensive form management microservice built with Go, Gin, and GORM following Clean Architecture principles.
+    
+    ## Features
+    - 📝 Complete form CRUD operations
+    - 🏗️ Dynamic form builder with validation
+    - 📊 Form analytics and insights
+    - 🔒 Access control and permissions
+    - 🚀 High-performance Go implementation
+    - 📈 Real-time form status tracking
+
+servers:
+  - url: http://localhost:8001/api/v1
+    description: Local Development
+  - url: https://forms.x-form.com/api/v1
+    description: Production
+
+paths:
+  /forms:
+    get:
+      tags:
+        - Forms
+      operationId: listForms
+      summary: List all forms
+      description: |
+        Retrieves a paginated list of forms for the authenticated user.
+        
+        ### Features
+        - Pagination support with configurable page size
+        - Search and filtering capabilities
+        - Sorting by multiple fields
+        - Organization-scoped results
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '../components/schemas/common.yaml#/parameters/Page'
+        - $ref: '../components/schemas/common.yaml#/parameters/Limit'
+        - $ref: '../components/schemas/common.yaml#/parameters/Sort'
+        - $ref: '../components/schemas/common.yaml#/parameters/Search'
+        - name: status
+          in: query
+          description: Filter by form status
+          schema:
+            type: string
+            enum: [draft, published, archived, deleted]
+            example: "published"
+        - name: category
+          in: query
+          description: Filter by form category
+          schema:
+            type: string
+            example: "feedback"
+      responses:
+        '200':
+          description: Forms retrieved successfully
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '../components/schemas/common.yaml#/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          forms:
+                            type: array
+                            items:
+                              $ref: '#/components/schemas/Form'
+                          pagination:
+                            $ref: '../components/schemas/common.yaml#/PaginationMeta'
+        '400':
+          $ref: '../components/schemas/common.yaml#/responses/BadRequest'
+        '401':
+          $ref: '../components/schemas/common.yaml#/responses/Unauthorized'
+        '500':
+          $ref: '../components/schemas/common.yaml#/responses/InternalServerError'
+
+    post:
+      tags:
+        - Forms
+      operationId: createForm
+      summary: Create a new form
+      description: |
+        Creates a new form with the specified configuration and questions.
+        
+        ### Validation Rules
+        - Form title is required and must be unique within organization
+        - At least one question must be provided
+        - Question types must be valid and properly configured
+        - Form settings must follow business rules
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateFormRequest'
+            examples:
+              contact:
+                summary: Contact form
+                value:
+                  title: "Contact Us Form"
+                  description: "Get in touch with our team"
+                  settings:
+                    isPublic: true
+                    requireAuth: false
+                    allowMultipleSubmissions: true
+                    closeDate: "2025-12-31T23:59:59Z"
+                  questions:
+                    - type: "text"
+                      label: "Full Name"
+                      required: true
+                      placeholder: "Enter your full name"
+                    - type: "email"
+                      label: "Email Address"
+                      required: true
+                      placeholder: "your.email@example.com"
+                    - type: "textarea"
+                      label: "Message"
+                      required: true
+                      placeholder: "How can we help you?"
+              survey:
+                summary: Customer feedback survey
+                value:
+                  title: "Customer Feedback Survey"
+                  description: "Help us improve our services"
+                  category: "feedback"
+                  settings:
+                    isPublic: true
+                    requireAuth: false
+                    allowMultipleSubmissions: false
+                  questions:
+                    - type: "radio"
+                      label: "How satisfied are you with our service?"
+                      required: true
+                      options:
+                        - "Very Satisfied"
+                        - "Satisfied"
+                        - "Neutral"
+                        - "Dissatisfied"
+                        - "Very Dissatisfied"
+                    - type: "checkbox"
+                      label: "Which features do you use most?"
+                      required: false
+                      options:
+                        - "Dashboard"
+                        - "Reports"
+                        - "Integrations"
+                        - "Mobile App"
+      responses:
+        '201':
+          description: Form created successfully
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '../components/schemas/common.yaml#/CreatedResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/Form'
+        '400':
+          $ref: '../components/schemas/common.yaml#/responses/BadRequest'
+        '401':
+          $ref: '../components/schemas/common.yaml#/responses/Unauthorized'
+        '500':
+          $ref: '../components/schemas/common.yaml#/responses/InternalServerError'
+
+  /forms/{formId}:
+    get:
+      tags:
+        - Forms
+      operationId: getForm
+      summary: Get form by ID
+      description: |
+        Retrieves a specific form by its ID, including all questions and settings.
+        
+        ### Access Control
+        - Form owners have full access
+        - Organization members can view published forms
+        - Public forms are accessible without authentication
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: formId
+          in: path
+          required: true
+          description: Form identifier
+          schema:
+            type: string
+            format: uuid
+            example: "550e8400-e29b-41d4-a716-446655440000"
+        - name: includeQuestions
+          in: query
+          description: Include form questions in response
+          schema:
+            type: boolean
+            default: true
+        - name: includeResponses
+          in: query
+          description: Include response count and basic statistics
+          schema:
+            type: boolean
+            default: false
+      responses:
+        '200':
+          description: Form retrieved successfully
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '../components/schemas/common.yaml#/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/Form'
+        '400':
+          $ref: '../components/schemas/common.yaml#/responses/BadRequest'
+        '401':
+          $ref: '../components/schemas/common.yaml#/responses/Unauthorized'
+        '403':
+          $ref: '../components/schemas/common.yaml#/responses/Forbidden'
+        '404':
+          $ref: '../components/schemas/common.yaml#/responses/NotFound'
+        '500':
+          $ref: '../components/schemas/common.yaml#/responses/InternalServerError'
+
+    put:
+      tags:
+        - Forms
+      operationId: updateForm
+      summary: Update form
+      description: |
+        Updates an existing form with new configuration and questions.
+        
+        ### Update Rules
+        - Only form owners can update forms
+        - Published forms have restricted update capabilities
+        - Form structure changes may affect existing responses
+        - Version control is maintained for audit purposes
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: formId
+          in: path
+          required: true
+          description: Form identifier
+          schema:
+            type: string
+            format: uuid
+            example: "550e8400-e29b-41d4-a716-446655440000"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateFormRequest'
+      responses:
+        '200':
+          description: Form updated successfully
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '../components/schemas/common.yaml#/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/Form'
+        '400':
+          $ref: '../components/schemas/common.yaml#/responses/BadRequest'
+        '401':
+          $ref: '../components/schemas/common.yaml#/responses/Unauthorized'
+        '403':
+          $ref: '../components/schemas/common.yaml#/responses/Forbidden'
+        '404':
+          $ref: '../components/schemas/common.yaml#/responses/NotFound'
+        '500':
+          $ref: '../components/schemas/common.yaml#/responses/InternalServerError'
+
+    delete:
+      tags:
+        - Forms
+      operationId: deleteForm
+      summary: Delete form
+      description: |
+        Soft deletes a form and its associated data.
+        
+        ### Deletion Policy
+        - Only form owners can delete forms
+        - Soft deletion preserves data for audit purposes
+        - Associated responses are also soft deleted
+        - Hard deletion available for GDPR compliance
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: formId
+          in: path
+          required: true
+          description: Form identifier
+          schema:
+            type: string
+            format: uuid
+            example: "550e8400-e29b-41d4-a716-446655440000"
+        - name: hardDelete
+          in: query
+          description: Permanently delete form and all data
+          schema:
+            type: boolean
+            default: false
+      responses:
+        '200':
+          description: Form deleted successfully
+          content:
+            application/json:
+              schema:
+                $ref: '../components/schemas/common.yaml#/SuccessResponse'
+        '400':
+          $ref: '../components/schemas/common.yaml#/responses/BadRequest'
+        '401':
+          $ref: '../components/schemas/common.yaml#/responses/Unauthorized'
+        '403':
+          $ref: '../components/schemas/common.yaml#/responses/Forbidden'
+        '404':
+          $ref: '../components/schemas/common.yaml#/responses/NotFound'
+        '500':
+          $ref: '../components/schemas/common.yaml#/responses/InternalServerError'
+
+  /forms/{formId}/publish:
+    post:
+      tags:
+        - Forms
+      operationId: publishForm
+      summary: Publish form
+      description: |
+        Publishes a draft form, making it available for responses.
+        
+        ### Publishing Rules
+        - Form must pass validation checks
+        - All required questions must be properly configured
+        - Form settings must be complete
+        - Generates public URL for form access
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: formId
+          in: path
+          required: true
+          description: Form identifier
+          schema:
+            type: string
+            format: uuid
+            example: "550e8400-e29b-41d4-a716-446655440000"
+      responses:
+        '200':
+          description: Form published successfully
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '../components/schemas/common.yaml#/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          form:
+                            $ref: '#/components/schemas/Form'
+                          publicUrl:
+                            type: string
+                            format: uri
+                            description: Public URL for form access
+                            example: "https://forms.x-form.com/f/550e8400-e29b-41d4-a716-446655440000"
+        '400':
+          $ref: '../components/schemas/common.yaml#/responses/BadRequest'
+        '401':
+          $ref: '../components/schemas/common.yaml#/responses/Unauthorized'
+        '403':
+          $ref: '../components/schemas/common.yaml#/responses/Forbidden'
+        '404':
+          $ref: '../components/schemas/common.yaml#/responses/NotFound'
+        '500':
+          $ref: '../components/schemas/common.yaml#/responses/InternalServerError'
+
+  /forms/{formId}/unpublish:
+    post:
+      tags:
+        - Forms
+      operationId: unpublishForm
+      summary: Unpublish form
+      description: |
+        Unpublishes a form, preventing new responses while preserving existing data.
+        
+        ### Unpublishing Effects
+        - Form becomes inaccessible for new responses
+        - Existing responses are preserved
+        - Form returns to draft status
+        - Public URL becomes inactive
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: formId
+          in: path
+          required: true
+          description: Form identifier
+          schema:
+            type: string
+            format: uuid
+            example: "550e8400-e29b-41d4-a716-446655440000"
+      responses:
+        '200':
+          description: Form unpublished successfully
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '../components/schemas/common.yaml#/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/Form'
+        '400':
+          $ref: '../components/schemas/common.yaml#/responses/BadRequest'
+        '401':
+          $ref: '../components/schemas/common.yaml#/responses/Unauthorized'
+        '403':
+          $ref: '../components/schemas/common.yaml#/responses/Forbidden'
+        '404':
+          $ref: '../components/schemas/common.yaml#/responses/NotFound'
+        '500':
+          $ref: '../components/schemas/common.yaml#/responses/InternalServerError'
+
+components:
+  schemas:
+    Form:
+      allOf:
+        - $ref: '../components/schemas/common.yaml#/EntityBase'
+        - type: object
+          required:
+            - title
+            - status
+            - questions
+          properties:
+            title:
+              type: string
+              description: Form title
+              minLength: 1
+              maxLength: 200
+              example: "Customer Feedback Survey"
+            description:
+              type: string
+              nullable: true
+              description: Form description
+              maxLength: 1000
+              example: "Help us improve our services by providing your feedback"
+            category:
+              type: string
+              nullable: true
+              description: Form category
+              maxLength: 50
+              example: "feedback"
+            status:
+              type: string
+              enum: [draft, published, archived, deleted]
+              description: Form status
+              example: "published"
+            settings:
+              $ref: '#/components/schemas/FormSettings'
+            questions:
+              type: array
+              description: Form questions
+              items:
+                $ref: '#/components/schemas/Question'
+              minItems: 1
+              example:
+                - id: "q1"
+                  type: "text"
+                  label: "Full Name"
+                  required: true
+                  order: 1
+                - id: "q2"
+                  type: "email"
+                  label: "Email Address"
+                  required: true
+                  order: 2
+            analytics:
+              $ref: '#/components/schemas/FormAnalytics'
+            publicUrl:
+              type: string
+              format: uri
+              nullable: true
+              readOnly: true
+              description: Public URL for form access (published forms only)
+              example: "https://forms.x-form.com/f/550e8400-e29b-41d4-a716-446655440000"
+            responseCount:
+              type: integer
+              readOnly: true
+              description: Total number of responses
+              minimum: 0
+              example: 247
+            lastSubmissionAt:
+              type: string
+              format: date-time
+              nullable: true
+              readOnly: true
+              description: Timestamp of last form submission
+              example: "2025-09-21T09:45:00Z"
+
+    FormSettings:
+      type: object
+      description: Form configuration settings
+      properties:
+        isPublic:
+          type: boolean
+          default: true
+          description: Whether form is publicly accessible
+          example: true
+        requireAuth:
+          type: boolean
+          default: false
+          description: Whether authentication is required to submit
+          example: false
+        allowMultipleSubmissions:
+          type: boolean
+          default: true
+          description: Whether users can submit multiple responses
+          example: false
+        collectEmail:
+          type: boolean
+          default: false
+          description: Whether to collect submitter email address
+          example: true
+        submitMessage:
+          type: string
+          nullable: true
+          description: Custom message shown after submission
+          maxLength: 500
+          example: "Thank you for your feedback! We'll get back to you soon."
+        redirectUrl:
+          type: string
+          format: uri
+          nullable: true
+          description: URL to redirect after submission
+          example: "https://example.com/thank-you"
+        closeDate:
+          type: string
+          format: date-time
+          nullable: true
+          description: Date when form closes for submissions
+          example: "2025-12-31T23:59:59Z"
+        limitResponses:
+          type: integer
+          nullable: true
+          description: Maximum number of responses allowed
+          minimum: 1
+          example: 1000
+        enableCaptcha:
+          type: boolean
+          default: false
+          description: Whether to enable CAPTCHA verification
+          example: true
+        allowFileUploads:
+          type: boolean
+          default: false
+          description: Whether file uploads are allowed
+          example: true
+        maxFileSize:
+          type: integer
+          nullable: true
+          description: Maximum file size in bytes
+          minimum: 1
+          example: 10485760
+        notifications:
+          $ref: '#/components/schemas/FormNotificationSettings'
+
+    FormNotificationSettings:
+      type: object
+      description: Form notification settings
+      properties:
+        emailOnSubmission:
+          type: boolean
+          default: false
+          description: Send email notification on new submission
+          example: true
+        notificationEmails:
+          type: array
+          description: Email addresses to notify
+          items:
+            type: string
+            format: email
+          example: ["admin@example.com", "support@example.com"]
+        slackWebhook:
+          type: string
+          format: uri
+          nullable: true
+          description: Slack webhook URL for notifications
+          example: "https://hooks.slack.com/services/..."
+        webhookUrl:
+          type: string
+          format: uri
+          nullable: true
+          description: Custom webhook URL for form submissions
+          example: "https://api.example.com/webhooks/form-submission"
+
+    Question:
+      type: object
+      required:
+        - id
+        - type
+        - label
+        - required
+        - order
+      properties:
+        id:
+          type: string
+          description: Question identifier
+          pattern: '^[a-zA-Z0-9_-]+$'
+          example: "q1"
+        type:
+          type: string
+          enum: [text, textarea, email, phone, number, date, time, datetime, radio, checkbox, select, file, rating, matrix, signature]
+          description: Question type
+          example: "text"
+        label:
+          type: string
+          description: Question label/text
+          minLength: 1
+          maxLength: 500
+          example: "What is your full name?"
+        description:
+          type: string
+          nullable: true
+          description: Additional question description or help text
+          maxLength: 1000
+          example: "Please provide your full legal name as it appears on official documents"
+        required:
+          type: boolean
+          description: Whether question is required
+          example: true
+        order:
+          type: integer
+          description: Question order in form
+          minimum: 1
+          example: 1
+        placeholder:
+          type: string
+          nullable: true
+          description: Placeholder text for input fields
+          maxLength: 200
+          example: "Enter your full name"
+        options:
+          type: array
+          nullable: true
+          description: Options for radio, checkbox, or select questions
+          items:
+            type: string
+          example: ["Option 1", "Option 2", "Option 3"]
+        validation:
+          $ref: '#/components/schemas/QuestionValidation'
+        conditional:
+          $ref: '#/components/schemas/ConditionalLogic'
+
+    QuestionValidation:
+      type: object
+      description: Question validation rules
+      properties:
+        minLength:
+          type: integer
+          nullable: true
+          description: Minimum text length
+          minimum: 0
+          example: 2
+        maxLength:
+          type: integer
+          nullable: true
+          description: Maximum text length
+          minimum: 1
+          example: 100
+        pattern:
+          type: string
+          nullable: true
+          description: Regular expression pattern
+          example: "^[A-Za-z\\s]+$"
+        min:
+          type: number
+          nullable: true
+          description: Minimum numeric value
+          example: 0
+        max:
+          type: number
+          nullable: true
+          description: Maximum numeric value
+          example: 100
+        fileTypes:
+          type: array
+          nullable: true
+          description: Allowed file types
+          items:
+            type: string
+          example: ["jpg", "png", "pdf"]
+        maxFileSize:
+          type: integer
+          nullable: true
+          description: Maximum file size in bytes
+          minimum: 1
+          example: 5242880
+
+    ConditionalLogic:
+      type: object
+      description: Conditional logic for question visibility
+      properties:
+        showIf:
+          type: object
+          description: Conditions for showing this question
+          properties:
+            questionId:
+              type: string
+              description: ID of the condition question
+              example: "q1"
+            operator:
+              type: string
+              enum: [equals, not_equals, contains, not_contains, greater_than, less_than]
+              description: Comparison operator
+              example: "equals"
+            value:
+              type: string
+              description: Value to compare against
+              example: "Yes"
+
+    FormAnalytics:
+      type: object
+      readOnly: true
+      description: Form analytics data
+      properties:
+        totalViews:
+          type: integer
+          description: Total form views
+          minimum: 0
+          example: 1250
+        totalSubmissions:
+          type: integer
+          description: Total form submissions
+          minimum: 0
+          example: 347
+        conversionRate:
+          type: number
+          format: float
+          description: Conversion rate (submissions/views)
+          minimum: 0
+          maximum: 1
+          example: 0.2776
+        averageCompletionTime:
+          type: number
+          format: float
+          description: Average completion time in seconds
+          minimum: 0
+          example: 245.6
+        dropoffRate:
+          type: number
+          format: float
+          description: Form abandonment rate
+          minimum: 0
+          maximum: 1
+          example: 0.15
+        lastUpdated:
+          type: string
+          format: date-time
+          description: Last analytics update timestamp
+          example: "2025-09-21T10:30:00Z"
+
+    CreateFormRequest:
+      type: object
+      required:
+        - title
+        - questions
+      properties:
+        title:
+          type: string
+          description: Form title
+          minLength: 1
+          maxLength: 200
+          example: "Customer Feedback Survey"
+        description:
+          type: string
+          nullable: true
+          description: Form description
+          maxLength: 1000
+          example: "Help us improve our services"
+        category:
+          type: string
+          nullable: true
+          description: Form category
+          maxLength: 50
+          example: "feedback"
+        settings:
+          $ref: '#/components/schemas/FormSettings'
+        questions:
+          type: array
+          description: Form questions
+          items:
+            $ref: '#/components/schemas/CreateQuestionRequest'
+          minItems: 1
+
+    CreateQuestionRequest:
+      type: object
+      required:
+        - type
+        - label
+        - required
+      properties:
+        type:
+          type: string
+          enum: [text, textarea, email, phone, number, date, time, datetime, radio, checkbox, select, file, rating, matrix, signature]
+          description: Question type
+          example: "text"
+        label:
+          type: string
+          description: Question label
+          minLength: 1
+          maxLength: 500
+          example: "What is your name?"
+        description:
+          type: string
+          nullable: true
+          description: Question description
+          maxLength: 1000
+        required:
+          type: boolean
+          description: Whether question is required
+          example: true
+        placeholder:
+          type: string
+          nullable: true
+          description: Placeholder text
+          maxLength: 200
+          example: "Enter your name"
+        options:
+          type: array
+          nullable: true
+          description: Options for choice questions
+          items:
+            type: string
+          example: ["Option 1", "Option 2"]
+        validation:
+          $ref: '#/components/schemas/QuestionValidation'
+        conditional:
+          $ref: '#/components/schemas/ConditionalLogic'
+
+    UpdateFormRequest:
+      type: object
+      properties:
+        title:
+          type: string
+          description: Form title
+          minLength: 1
+          maxLength: 200
+          example: "Updated Form Title"
+        description:
+          type: string
+          nullable: true
+          description: Form description
+          maxLength: 1000
+        category:
+          type: string
+          nullable: true
+          description: Form category
+          maxLength: 50
+        settings:
+          $ref: '#/components/schemas/FormSettings'
+        questions:
+          type: array
+          description: Form questions
+          items:
+            allOf:
+              - $ref: '#/components/schemas/CreateQuestionRequest'
+              - type: object
+                properties:
+                  id:
+                    type: string
+                    description: Existing question ID (for updates)
+                    example: "q1"
+
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+security:
+  - BearerAuth: []
+
+tags:
+  - name: Forms
+    description: Form management operations

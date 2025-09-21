@@ -1,0 +1,475 @@
+# Common Schema Components for X-Form Backend API
+
+# Standard Response Schemas
+SuccessResponse:
+  type: object
+  required:
+    - success
+    - data
+    - timestamp
+  properties:
+    success:
+      type: boolean
+      description: Indicates if the operation was successful
+      example: true
+    data:
+      type: object
+      description: Response data
+      additionalProperties: true
+    meta:
+      $ref: '#/ResponseMeta'
+    timestamp:
+      type: string
+      format: date-time
+      description: Response timestamp in ISO 8601 format
+      example: "2025-09-21T10:30:00Z"
+    correlationId:
+      type: string
+      format: uuid
+      description: Request correlation ID for tracing
+      example: "550e8400-e29b-41d4-a716-446655440001"
+
+CreatedResponse:
+  type: object
+  required:
+    - success
+    - data
+    - timestamp
+  properties:
+    success:
+      type: boolean
+      description: Indicates if the creation was successful
+      example: true
+    data:
+      type: object
+      description: Created resource data
+      additionalProperties: true
+    meta:
+      $ref: '#/ResponseMeta'
+    timestamp:
+      type: string
+      format: date-time
+      description: Response timestamp in ISO 8601 format
+      example: "2025-09-21T10:30:00Z"
+    correlationId:
+      type: string
+      format: uuid
+      description: Request correlation ID for tracing
+      example: "550e8400-e29b-41d4-a716-446655440001"
+
+ErrorResponse:
+  type: object
+  required:
+    - success
+    - error
+    - timestamp
+  properties:
+    success:
+      type: boolean
+      description: Indicates if the operation was successful
+      example: false
+    error:
+      $ref: '#/ErrorDetail'
+    timestamp:
+      type: string
+      format: date-time
+      description: Error timestamp in ISO 8601 format
+      example: "2025-09-21T10:30:00Z"
+    correlationId:
+      type: string
+      format: uuid
+      description: Request correlation ID for tracing
+      example: "550e8400-e29b-41d4-a716-446655440001"
+
+ErrorDetail:
+  type: object
+  required:
+    - code
+    - message
+  properties:
+    code:
+      type: string
+      description: Error code for programmatic handling
+      enum:
+        - VALIDATION_ERROR
+        - UNAUTHORIZED
+        - FORBIDDEN
+        - NOT_FOUND
+        - CONFLICT
+        - RATE_LIMITED
+        - INTERNAL_ERROR
+        - SERVICE_UNAVAILABLE
+        - DATABASE_ERROR
+        - EXTERNAL_SERVICE_ERROR
+      example: "VALIDATION_ERROR"
+    message:
+      type: string
+      description: Human-readable error message
+      example: "Invalid request parameters"
+    details:
+      type: object
+      description: Additional error details
+      additionalProperties: true
+      example:
+        field: "email"
+        reason: "Invalid email format"
+    stack:
+      type: string
+      description: Error stack trace (development only)
+      example: "Error: Invalid email format\n    at validateEmail (/app/src/validators/auth.js:15:11)"
+
+ResponseMeta:
+  type: object
+  description: Response metadata for pagination and additional information
+  properties:
+    pagination:
+      $ref: '#/PaginationMeta'
+    total:
+      type: integer
+      description: Total number of items
+      minimum: 0
+      example: 150
+    filters:
+      type: object
+      description: Applied filters
+      additionalProperties: true
+      example:
+        status: "active"
+        category: "feedback"
+    performance:
+      $ref: '#/PerformanceMeta'
+
+PaginationMeta:
+  type: object
+  description: Pagination metadata
+  properties:
+    page:
+      type: integer
+      description: Current page number
+      minimum: 1
+      example: 2
+    limit:
+      type: integer
+      description: Items per page
+      minimum: 1
+      maximum: 100
+      example: 20
+    totalPages:
+      type: integer
+      description: Total number of pages
+      minimum: 0
+      example: 8
+    totalItems:
+      type: integer
+      description: Total number of items
+      minimum: 0
+      example: 150
+    hasNext:
+      type: boolean
+      description: Whether there are more pages
+      example: true
+    hasPrev:
+      type: boolean
+      description: Whether there are previous pages
+      example: true
+    nextPage:
+      type: integer
+      nullable: true
+      description: Next page number
+      example: 3
+    prevPage:
+      type: integer
+      nullable: true
+      description: Previous page number
+      example: 1
+
+PerformanceMeta:
+  type: object
+  description: Performance metrics
+  properties:
+    queryTime:
+      type: number
+      format: float
+      description: Database query time in milliseconds
+      example: 45.23
+    responseTime:
+      type: number
+      format: float
+      description: Total response time in milliseconds
+      example: 120.45
+    cacheHit:
+      type: boolean
+      description: Whether the response was served from cache
+      example: false
+
+# Entity Base Schemas
+EntityBase:
+  type: object
+  description: Base properties for all entities
+  required:
+    - id
+    - createdAt
+    - updatedAt
+  properties:
+    id:
+      type: string
+      format: uuid
+      description: Unique identifier
+      example: "550e8400-e29b-41d4-a716-446655440000"
+    createdAt:
+      type: string
+      format: date-time
+      description: Creation timestamp
+      example: "2025-09-21T10:30:00Z"
+    updatedAt:
+      type: string
+      format: date-time
+      description: Last update timestamp
+      example: "2025-09-21T11:15:30Z"
+    createdBy:
+      type: string
+      format: uuid
+      nullable: true
+      description: ID of the user who created this entity
+      example: "550e8400-e29b-41d4-a716-446655440001"
+    updatedBy:
+      type: string
+      format: uuid
+      nullable: true
+      description: ID of the user who last updated this entity
+      example: "550e8400-e29b-41d4-a716-446655440001"
+    version:
+      type: integer
+      description: Entity version for optimistic locking
+      minimum: 1
+      example: 3
+    organizationId:
+      type: string
+      format: uuid
+      nullable: true
+      description: Organization identifier for multi-tenancy
+      example: "550e8400-e29b-41d4-a716-446655440002"
+
+# User Schema
+User:
+  allOf:
+    - $ref: '#/EntityBase'
+    - type: object
+      required:
+        - email
+        - firstName
+        - lastName
+        - status
+      properties:
+        email:
+          type: string
+          format: email
+          description: User email address
+          example: "john.doe@example.com"
+        firstName:
+          type: string
+          description: User first name
+          minLength: 1
+          maxLength: 50
+          example: "John"
+        lastName:
+          type: string
+          description: User last name
+          minLength: 1
+          maxLength: 50
+          example: "Doe"
+        fullName:
+          type: string
+          readOnly: true
+          description: Computed full name
+          example: "John Doe"
+        avatar:
+          type: string
+          format: uri
+          nullable: true
+          description: User avatar URL
+          example: "https://example.com/avatars/john-doe.jpg"
+        phoneNumber:
+          type: string
+          nullable: true
+          description: User phone number
+          pattern: '^[\+]?[1-9][\d]{0,15}$'
+          example: "+1-555-123-4567"
+        status:
+          type: string
+          enum: [active, inactive, suspended, pending_verification]
+          description: User account status
+          example: "active"
+        role:
+          type: string
+          enum: [admin, user, moderator, viewer]
+          description: User role
+          default: "user"
+          example: "user"
+        preferences:
+          $ref: '#/UserPreferences'
+        lastLoginAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: Last login timestamp
+          example: "2025-09-21T09:45:00Z"
+        emailVerifiedAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: Email verification timestamp
+          example: "2025-09-21T08:30:00Z"
+
+UserPreferences:
+  type: object
+  description: User preferences and settings
+  properties:
+    theme:
+      type: string
+      enum: [light, dark, auto]
+      default: "auto"
+      description: UI theme preference
+      example: "dark"
+    language:
+      type: string
+      pattern: '^[a-z]{2}(-[A-Z]{2})?$'
+      default: "en"
+      description: Language preference (ISO 639-1)
+      example: "en-US"
+    timezone:
+      type: string
+      default: "UTC"
+      description: Timezone preference (IANA timezone)
+      example: "America/New_York"
+    notifications:
+      $ref: '#/NotificationPreferences'
+    dashboard:
+      type: object
+      description: Dashboard customization settings
+      additionalProperties: true
+      example:
+        layout: "grid"
+        widgets: ["recent_forms", "analytics", "notifications"]
+
+NotificationPreferences:
+  type: object
+  description: Notification preferences
+  properties:
+    email:
+      type: boolean
+      default: true
+      description: Enable email notifications
+      example: true
+    push:
+      type: boolean
+      default: true
+      description: Enable push notifications
+      example: false
+    sms:
+      type: boolean
+      default: false
+      description: Enable SMS notifications
+      example: false
+    types:
+      type: object
+      description: Specific notification type preferences
+      properties:
+        formSubmissions:
+          type: boolean
+          default: true
+          example: true
+        formComments:
+          type: boolean
+          default: true
+          example: false
+        systemUpdates:
+          type: boolean
+          default: false
+          example: true
+        securityAlerts:
+          type: boolean
+          default: true
+          example: true
+
+# Health Check Schema
+HealthStatus:
+  type: object
+  required:
+    - status
+    - timestamp
+  properties:
+    status:
+      type: string
+      enum: [healthy, degraded, unhealthy]
+      description: Overall service health status
+      example: "healthy"
+    timestamp:
+      type: string
+      format: date-time
+      description: Health check timestamp
+      example: "2025-09-21T10:30:00Z"
+    uptime:
+      type: number
+      format: float
+      description: Service uptime in seconds
+      example: 86400.5
+    version:
+      type: string
+      description: Service version
+      example: "1.0.0"
+    environment:
+      type: string
+      enum: [development, staging, production]
+      description: Deployment environment
+      example: "development"
+    services:
+      type: object
+      description: Individual service health statuses
+      additionalProperties:
+        $ref: '#/ServiceHealth'
+      example:
+        database:
+          status: "healthy"
+          responseTime: 25.3
+          lastCheck: "2025-09-21T10:29:45Z"
+        redis:
+          status: "healthy"
+          responseTime: 1.2
+          lastCheck: "2025-09-21T10:29:45Z"
+
+ServiceHealth:
+  type: object
+  required:
+    - status
+    - lastCheck
+  properties:
+    status:
+      type: string
+      enum: [healthy, degraded, unhealthy]
+      description: Service health status
+      example: "healthy"
+    responseTime:
+      type: number
+      format: float
+      nullable: true
+      description: Service response time in milliseconds
+      example: 25.3
+    lastCheck:
+      type: string
+      format: date-time
+      description: Last health check timestamp
+      example: "2025-09-21T10:29:45Z"
+    message:
+      type: string
+      nullable: true
+      description: Health status message
+      example: "Database connection successful"
+    details:
+      type: object
+      nullable: true
+      description: Additional health details
+      additionalProperties: true
+      example:
+        connectionPool: "8/10 active connections"
+        memoryUsage: "65%"

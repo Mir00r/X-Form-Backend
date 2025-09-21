@@ -1,0 +1,385 @@
+openapi: 3.0.3
+info:
+  title: X-Form Backend API
+  version: 2.0.0
+  description: |
+    # X-Form Backend - Comprehensive API Specification
+    
+    A modern, microservices-based form management platform built with Clean Architecture principles.
+    
+    ## 🏗️ Architecture Overview
+    - **Traefik All-in-One**: Single-component ingress, API gateway, and management
+    - **Microservices**: Independent, scalable service architecture
+    - **Clean Architecture**: Domain-driven design with SOLID principles
+    - **Event-Driven**: Asynchronous communication patterns
+    
+    ## 🔧 Service Stack
+    - **Auth Service**: Node.js + TypeScript + Express (Authentication & Authorization)
+    - **Form Service**: Go + Gin + GORM (Form Management)
+    - **Response Service**: Node.js + TypeScript + Express (Form Responses)
+    - **Real-time Service**: Go + WebSockets + Redis (Live Features)
+    - **Analytics Service**: Python + FastAPI (Analytics & Reporting)
+    - **File Service**: AWS Lambda + S3 (File Management)
+    
+    ## 💾 Data Layer
+    - **PostgreSQL**: Users, forms, structured data
+    - **Firestore**: Form responses, document storage
+    - **Redis**: Real-time features, caching, pub/sub
+    - **BigQuery**: Analytics, reporting
+    - **S3**: File storage
+    
+    ## 🚀 Key Features
+    - **Multi-tenancy**: Organization-based isolation
+    - **Real-time Collaboration**: Live form editing and responses
+    - **Advanced Analytics**: Comprehensive reporting and insights
+    - **File Management**: Secure file uploads and processing
+    - **Extensible**: Plugin architecture for custom integrations
+    
+  contact:
+    name: X-Form API Support Team
+    email: api-support@x-form.com
+    url: https://docs.x-form.com/support
+  license:
+    name: MIT License
+    url: https://opensource.org/licenses/MIT
+  termsOfService: https://x-form.com/terms-of-service
+
+externalDocs:
+  description: Complete X-Form Documentation
+  url: https://docs.x-form.com
+
+servers:
+  - url: http://localhost:8080/api/v1
+    description: 🏠 Local Development (Traefik Gateway)
+  - url: http://api.localhost/api/v1
+    description: 🧪 Local Development (Direct Access)
+  - url: https://api-dev.x-form.com/api/v1
+    description: 🚧 Development Environment
+  - url: https://api-staging.x-form.com/api/v1
+    description: 🎭 Staging Environment
+  - url: https://api.x-form.com/api/v1
+    description: 🚀 Production Environment
+
+paths:
+  # Health and System Endpoints
+  /health:
+    $ref: './components/paths/system.yaml#/Health'
+  
+  /metrics:
+    $ref: './components/paths/system.yaml#/Metrics'
+  
+  # Authentication Service Endpoints
+  /auth/register:
+    $ref: './services/auth-service.yaml#/paths/~1auth~1register'
+  
+  /auth/login:
+    $ref: './services/auth-service.yaml#/paths/~1auth~1login'
+  
+  /auth/logout:
+    $ref: './services/auth-service.yaml#/paths/~1auth~1logout'
+  
+  /auth/refresh:
+    $ref: './services/auth-service.yaml#/paths/~1auth~1refresh'
+  
+  /auth/me:
+    $ref: './services/auth-service.yaml#/paths/~1auth~1me'
+  
+  # Form Service Endpoints
+  /forms:
+    $ref: './services/form-service.yaml#/paths/~1forms'
+  
+  /forms/{formId}:
+    $ref: './services/form-service.yaml#/paths/~1forms~1{formId}'
+  
+  /forms/{formId}/publish:
+    $ref: './services/form-service.yaml#/paths/~1forms~1{formId}~1publish'
+  
+  /forms/{formId}/unpublish:
+    $ref: './services/form-service.yaml#/paths/~1forms~1{formId}~1unpublish'
+  
+  # Response Service Endpoints
+  /forms/{formId}/responses:
+    $ref: './services/response-service.yaml#/paths/~1forms~1{formId}~1responses'
+  
+  /forms/{formId}/responses/{responseId}:
+    $ref: './services/response-service.yaml#/paths/~1forms~1{formId}~1responses~1{responseId}'
+  
+  # Analytics Service Endpoints
+  /analytics/forms/{formId}:
+    $ref: './services/analytics-service.yaml#/paths/~1analytics~1forms~1{formId}'
+  
+  /analytics/dashboard:
+    $ref: './services/analytics-service.yaml#/paths/~1analytics~1dashboard'
+  
+  # Real-time Service WebSocket
+  /ws:
+    $ref: './services/realtime-service.yaml#/paths/~1ws'
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: |
+        JWT token for authentication. Format: `Bearer <token>`
+        
+        ### How to obtain a token:
+        1. Register or login via `/auth/register` or `/auth/login`
+        2. Use the returned `accessToken` in the Authorization header
+        3. Refresh token when needed via `/auth/refresh`
+    
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-API-Key
+      description: API key for service-to-service communication
+  
+  parameters:
+    # Common Parameters
+    ApiVersion:
+      name: version
+      in: path
+      required: true
+      description: API version
+      schema:
+        type: string
+        enum: [v1, v2]
+        default: v1
+    
+    OrganizationId:
+      name: organizationId
+      in: header
+      required: false
+      description: Organization identifier for multi-tenant access
+      schema:
+        type: string
+        format: uuid
+        example: "550e8400-e29b-41d4-a716-446655440000"
+    
+    CorrelationId:
+      name: X-Correlation-ID
+      in: header
+      required: false
+      description: Request correlation ID for tracing
+      schema:
+        type: string
+        format: uuid
+        example: "550e8400-e29b-41d4-a716-446655440001"
+    
+    # Pagination Parameters
+    Page:
+      name: page
+      in: query
+      required: false
+      description: Page number for pagination
+      schema:
+        type: integer
+        minimum: 1
+        default: 1
+        example: 1
+    
+    Limit:
+      name: limit
+      in: query
+      required: false
+      description: Number of items per page
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 20
+        example: 20
+    
+    Sort:
+      name: sort
+      in: query
+      required: false
+      description: Sort field and direction (field:asc or field:desc)
+      schema:
+        type: string
+        example: "createdAt:desc"
+    
+    Search:
+      name: search
+      in: query
+      required: false
+      description: Search term for filtering results
+      schema:
+        type: string
+        example: "customer feedback"
+
+  responses:
+    # Standard Responses
+    Success:
+      description: Successful operation
+      content:
+        application/json:
+          schema:
+            $ref: './components/schemas/common.yaml#/SuccessResponse'
+    
+    Created:
+      description: Resource created successfully
+      content:
+        application/json:
+          schema:
+            $ref: './components/schemas/common.yaml#/CreatedResponse'
+    
+    BadRequest:
+      description: Invalid request parameters
+      content:
+        application/json:
+          schema:
+            $ref: './components/schemas/common.yaml#/ErrorResponse'
+          example:
+            success: false
+            error:
+              code: "VALIDATION_ERROR"
+              message: "Invalid request parameters"
+              details:
+                field: "email"
+                reason: "Invalid email format"
+            timestamp: "2025-09-21T10:30:00Z"
+            correlationId: "550e8400-e29b-41d4-a716-446655440001"
+    
+    Unauthorized:
+      description: Authentication required
+      content:
+        application/json:
+          schema:
+            $ref: './components/schemas/common.yaml#/ErrorResponse'
+          example:
+            success: false
+            error:
+              code: "UNAUTHORIZED"
+              message: "Authentication required"
+            timestamp: "2025-09-21T10:30:00Z"
+            correlationId: "550e8400-e29b-41d4-a716-446655440001"
+    
+    Forbidden:
+      description: Insufficient permissions
+      content:
+        application/json:
+          schema:
+            $ref: './components/schemas/common.yaml#/ErrorResponse'
+          example:
+            success: false
+            error:
+              code: "FORBIDDEN"
+              message: "Insufficient permissions to access this resource"
+            timestamp: "2025-09-21T10:30:00Z"
+            correlationId: "550e8400-e29b-41d4-a716-446655440001"
+    
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: './components/schemas/common.yaml#/ErrorResponse'
+          example:
+            success: false
+            error:
+              code: "NOT_FOUND"
+              message: "The requested resource was not found"
+            timestamp: "2025-09-21T10:30:00Z"
+            correlationId: "550e8400-e29b-41d4-a716-446655440001"
+    
+    Conflict:
+      description: Resource conflict
+      content:
+        application/json:
+          schema:
+            $ref: './components/schemas/common.yaml#/ErrorResponse'
+          example:
+            success: false
+            error:
+              code: "CONFLICT"
+              message: "Resource already exists"
+            timestamp: "2025-09-21T10:30:00Z"
+            correlationId: "550e8400-e29b-41d4-a716-446655440001"
+    
+    RateLimited:
+      description: Too many requests
+      content:
+        application/json:
+          schema:
+            $ref: './components/schemas/common.yaml#/ErrorResponse'
+          example:
+            success: false
+            error:
+              code: "RATE_LIMITED"
+              message: "Too many requests, please try again later"
+              details:
+                retryAfter: 60
+            timestamp: "2025-09-21T10:30:00Z"
+            correlationId: "550e8400-e29b-41d4-a716-446655440001"
+    
+    InternalServerError:
+      description: Internal server error
+      content:
+        application/json:
+          schema:
+            $ref: './components/schemas/common.yaml#/ErrorResponse'
+          example:
+            success: false
+            error:
+              code: "INTERNAL_ERROR"
+              message: "An unexpected error occurred"
+            timestamp: "2025-09-21T10:30:00Z"
+            correlationId: "550e8400-e29b-41d4-a716-446655440001"
+
+security:
+  - BearerAuth: []
+
+tags:
+  - name: Authentication
+    description: User authentication and authorization operations
+    externalDocs:
+      url: https://docs.x-form.com/auth
+  
+  - name: Forms
+    description: Form management and configuration operations
+    externalDocs:
+      url: https://docs.x-form.com/forms
+  
+  - name: Responses
+    description: Form response collection and management operations
+    externalDocs:
+      url: https://docs.x-form.com/responses
+  
+  - name: Analytics
+    description: Analytics and reporting operations
+    externalDocs:
+      url: https://docs.x-form.com/analytics
+  
+  - name: Real-time
+    description: Real-time communication and WebSocket operations
+    externalDocs:
+      url: https://docs.x-form.com/realtime
+  
+  - name: Files
+    description: File upload and management operations
+    externalDocs:
+      url: https://docs.x-form.com/files
+  
+  - name: System
+    description: System health and monitoring operations
+    externalDocs:
+      url: https://docs.x-form.com/system
+
+x-tagGroups:
+  - name: Core Services
+    tags:
+      - Authentication
+      - Forms
+      - Responses
+  
+  - name: Advanced Features
+    tags:
+      - Analytics
+      - Real-time
+      - Files
+  
+  - name: System
+    tags:
+      - System

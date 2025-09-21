@@ -1,0 +1,69 @@
+{
+  "name": "x-form-backend-specs",
+  "version": "1.0.0",
+  "description": "Centralized API specifications for X-Form Backend using GitHub Spec Kit",
+  "private": true,
+  "scripts": {
+    "spec:validate": "spectral lint specs/openapi.yaml",
+    "spec:validate:all": "spectral lint 'specs/services/*.yaml' 'specs/openapi.yaml'",
+    "spec:lint": "spectral lint --format=stylish specs/openapi.yaml",
+    "spec:lint:fix": "spectral lint --format=stylish --fix specs/openapi.yaml",
+    "spec:build": "swagger-codegen bundle -o specs/dist/openapi.yaml specs/openapi.yaml",
+    "spec:bundle": "redocly bundle specs/openapi.yaml --output specs/dist/openapi-bundled.yaml",
+    "spec:docs": "redocly build-docs specs/openapi.yaml --output specs/docs/index.html",
+    "spec:serve": "node specs/docs/portal-simple.js",
+    "spec:dev": "nodemon specs/docs/portal-simple.js",
+    "spec:test": "newman run specs/tests/postman/x-form-api.postman_collection.json",
+    "spec:test:dev": "newman run specs/tests/postman/x-form-api.postman_collection.json -e specs/tests/environments/dev.json",
+    "spec:test:staging": "newman run specs/tests/postman/x-form-api.postman_collection.json -e specs/tests/environments/staging.json",
+    "spec:generate:client": "npm run spec:generate:ts && npm run spec:generate:go && npm run spec:generate:python",
+    "spec:generate:ts": "openapi-generator-cli generate -i specs/openapi.yaml -g typescript-axios -o generated/typescript-client",
+    "spec:generate:go": "openapi-generator-cli generate -i specs/openapi.yaml -g go -o generated/go-client",
+    "spec:generate:python": "openapi-generator-cli generate -i specs/openapi.yaml -g python -o generated/python-client",
+    "spec:diff": "redocly diff specs/openapi.yaml specs/openapi-previous.yaml",
+    "spec:merge": "redocly join specs/services/*.yaml --output specs/openapi-merged.yaml",
+    "spec:stats": "redocly stats specs/openapi.yaml",
+    "spec:preview": "redocly preview-docs specs/openapi.yaml",
+    "precommit": "npm run spec:validate:all && npm run spec:lint",
+    "postinstall": "echo 'GitHub Spec Kit setup complete! Run npm run spec:serve to start the documentation portal.'",
+    "start": "npm run spec:serve",
+    "dev": "npm run spec:dev",
+    "test": "npm run spec:test:dev",
+    "build": "npm run spec:bundle && npm run spec:docs",
+    "validate": "npm run spec:validate:all",
+    "lint": "npm run spec:lint"
+  },
+  "keywords": [
+    "api",
+    "openapi",
+    "swagger",
+    "microservices",
+    "x-form",
+    "spec-kit"
+  ],
+  "author": "X-Form Team",
+  "license": "MIT",
+  "devDependencies": {
+    "@redocly/cli": "^1.4.0",
+    "@stoplight/spectral-cli": "^6.11.0",
+    "newman": "^6.0.0",
+    "nodemon": "^3.0.1",
+    "yaml": "^2.3.2"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "cors": "^2.8.5",
+    "helmet": "^7.0.0",
+    "http-proxy-middleware": "^2.0.6",
+    "swagger-ui-express": "^5.0.0"
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=8.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Mir00r/X-Form-Backend.git",
+    "directory": "specs"
+  }
+}

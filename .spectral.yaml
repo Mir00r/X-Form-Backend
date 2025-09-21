@@ -1,0 +1,346 @@
+# Spectral Configuration for X-Form Backend API Specifications
+# Ensures consistent, high-quality OpenAPI specifications across all services
+
+extends: 
+  - "spectral:oas"
+
+documentationUrl: "https://docs.x-form.com/api-standards"
+
+rules:
+  # ========================================
+  # X-Form Specific Rules
+  # ========================================
+  
+  x-form-operation-summary:
+    description: "Operation summary should be descriptive and concise"
+    message: "Operation summary should be between 10-80 characters and descriptive"
+    given: "$.paths.*[get,post,put,patch,delete]"
+    severity: error
+    then:
+      field: "summary"
+      function: "length"
+      functionOptions:
+        min: 10
+        max: 80
+
+  x-form-operation-description:
+    description: "Operations must have detailed descriptions"
+    message: "Operation description is required and should be comprehensive"
+    given: "$.paths.*[get,post,put,patch,delete]"
+    severity: error
+    then:
+      field: "description"
+      function: "truthy"
+
+  x-form-operation-id:
+    description: "Operations must have camelCase operationId"
+    message: "operationId should be in camelCase format"
+    given: "$.paths.*[get,post,put,patch,delete]"
+    severity: error
+    then:
+      field: "operationId"
+      function: "pattern"
+      functionOptions:
+        match: "^[a-z][a-zA-Z0-9]*$"
+
+  x-form-tags-required:
+    description: "Operations must have at least one tag"
+    message: "Operations must be tagged for proper organization"
+    given: "$.paths.*[get,post,put,patch,delete]"
+    severity: error
+    then:
+      field: "tags"
+      function: "length"
+      functionOptions:
+        min: 1
+
+  x-form-response-examples:
+    description: "Successful responses should include examples"
+    message: "2xx responses should have examples for better documentation"
+    given: "$.paths.*[get,post,put,patch,delete].responses[?(@property.match(/^2/))]"
+    severity: warn
+    then:
+      field: "content.application/json.example"
+      function: "truthy"
+
+  x-form-error-responses:
+    description: "Operations should define common error responses"
+    message: "Operations should handle common HTTP error codes (400, 401, 500)"
+    given: "$.paths.*[get,post,put,patch,delete]"
+    severity: warn
+    then:
+      field: "responses"
+      function: "schema"
+      functionOptions:
+        schema:
+          type: "object"
+          anyOf:
+            - required: ["400"]
+            - required: ["401"] 
+            - required: ["500"]
+
+  x-form-security-required:
+    description: "Protected endpoints must specify security requirements"
+    message: "Endpoints requiring authentication should define security requirements"
+    given: "$.paths.*[post,put,patch,delete]"
+    severity: error
+    then:
+      field: "security"
+      function: "truthy"
+
+  x-form-request-body-description:
+    description: "Request bodies should have descriptions"
+    message: "Request body should include a clear description"
+    given: "$.paths.*[post,put,patch].requestBody"
+    severity: warn
+    then:
+      field: "description"
+      function: "truthy"
+
+  x-form-parameter-description:
+    description: "Parameters must have descriptions"
+    message: "All parameters should have clear descriptions"
+    given: "$.paths.*.*.parameters.*"
+    severity: error
+    then:
+      field: "description"
+      function: "truthy"
+
+  x-form-schema-properties:
+    description: "Schema properties should have descriptions and examples"
+    message: "Schema properties should include descriptions for clarity"
+    given: "$.components.schemas.*.properties.*"
+    severity: warn
+    then:
+      field: "description"
+      function: "truthy"
+
+  x-form-consistent-response-format:
+    description: "Responses should follow standard format"
+    message: "All responses should follow the standardized X-Form response format"
+    given: "$.paths.*[get,post,put,patch,delete].responses.2*.content.application/json.schema"
+    severity: error
+    then:
+      function: "schema"
+      functionOptions:
+        schema:
+          type: "object"
+          anyOf:
+            - allOf:
+                - $ref: "#/components/schemas/SuccessResponse"
+            - allOf:
+                - $ref: "#/components/schemas/CreatedResponse"
+
+  # ========================================
+  # Enhanced OpenAPI Rules
+  # ========================================
+
+  operation-success-response:
+    description: "Operations must have at least one success response"
+    message: "Every operation should define at least one 2xx response"
+    given: "$.paths.*[get,post,put,patch,delete]"
+    severity: error
+    then:
+      field: "responses"
+      function: "schema"
+      functionOptions:
+        schema:
+          type: "object"
+          patternProperties:
+            "^2[0-9][0-9]$":
+              type: "object"
+          minProperties: 1
+
+  consistent-property-names:
+    description: "Property names should be consistent across schemas"
+    message: "Use camelCase for property names consistently"
+    given: "$.components.schemas.*.properties.*~"
+    severity: warn
+    then:
+      function: "pattern"
+      functionOptions:
+        match: "^[a-z][a-zA-Z0-9]*$"
+
+  security-scheme-description:
+    description: "Security schemes should have descriptions"
+    message: "Security schemes should explain how authentication works"
+    given: "$.components.securitySchemes.*"
+    severity: error
+    then:
+      field: "description"
+      function: "truthy"
+
+  # ========================================
+  # Performance and Best Practices
+  # ========================================
+
+  no-excessive-nesting:
+    description: "Avoid deeply nested schemas"
+    message: "Schema nesting should not exceed 4 levels for readability"
+    given: "$.components.schemas"
+    severity: warn
+    then:
+      function: "schema"
+      functionOptions:
+        schema:
+          type: "object"
+          additionalProperties:
+            $ref: "#/$defs/max-depth-schema"
+        $defs:
+          max-depth-schema:
+            type: "object"
+            properties:
+              properties:
+                type: "object"
+                additionalProperties:
+                  type: "object"
+                  properties:
+                    properties:
+                      type: "object"
+                      additionalProperties:
+                        type: "object"
+                        properties:
+                          properties:
+                            type: "object"
+                            additionalProperties: false
+
+  meaningful-http-verbs:
+    description: "Use appropriate HTTP verbs for operations"
+    message: "HTTP verbs should match the operation semantics"
+    given: "$.paths.*"
+    severity: error
+    then:
+      function: "schema"
+      functionOptions:
+        schema:
+          type: "object"
+          patternProperties:
+            "^get$":
+              properties:
+                operationId:
+                  pattern: "^(get|list|fetch|retrieve|find)"
+            "^post$":
+              properties:
+                operationId:
+                  pattern: "^(create|add|submit|send|generate)"
+            "^put$":
+              properties:
+                operationId:
+                  pattern: "^(update|replace|set)"
+            "^patch$":
+              properties:
+                operationId:
+                  pattern: "^(update|modify|patch)"
+            "^delete$":
+              properties:
+                operationId:
+                  pattern: "^(delete|remove|destroy)"
+
+  # ========================================
+  # Documentation Quality
+  # ========================================
+
+  comprehensive-info:
+    description: "API info should be comprehensive"
+    message: "API info should include title, version, description, and contact"
+    given: "$.info"
+    severity: error
+    then:
+      function: "schema"
+      functionOptions:
+        schema:
+          type: "object"
+          required: ["title", "version", "description", "contact"]
+          properties:
+            title:
+              type: "string"
+              minLength: 5
+            version:
+              type: "string"
+              pattern: "^\\d+\\.\\d+\\.\\d+"
+            description:
+              type: "string"
+              minLength: 50
+            contact:
+              type: "object"
+              required: ["name", "email"]
+
+  servers-environment-specific:
+    description: "Servers should specify environment-specific URLs"
+    message: "Define servers for different environments (dev, staging, prod)"
+    given: "$.servers"
+    severity: warn
+    then:
+      function: "length"
+      functionOptions:
+        min: 2
+
+  # ========================================
+  # Microservices Specific Rules
+  # ========================================
+
+  service-tags:
+    description: "Services should use consistent tag naming"
+    message: "Tags should represent logical service boundaries"
+    given: "$.tags.*"
+    severity: warn
+    then:
+      field: "name"
+      function: "pattern"
+      functionOptions:
+        match: "^[A-Z][a-zA-Z\\s]*$"
+
+  health-endpoint:
+    description: "Services should provide health check endpoints"
+    message: "Every service should have a /health endpoint"
+    given: "$"
+    severity: warn
+    then:
+      function: "schema"
+      functionOptions:
+        schema:
+          type: "object"
+          properties:
+            paths:
+              type: "object"
+              required: ["/health"]
+
+  # ========================================
+  # Security Rules
+  # ========================================
+
+  security-schemes-jwt:
+    description: "JWT security schemes should specify bearerFormat"
+    message: "JWT security schemes should specify bearerFormat as JWT"
+    given: "$.components.securitySchemes[?(@.type === 'http' && @.scheme === 'bearer')]"
+    severity: error
+    then:
+      field: "bearerFormat"
+      function: "pattern"
+      functionOptions:
+        match: "^JWT$"
+
+  no-api-key-in-url:
+    description: "API keys should not be passed in URL"
+    message: "API keys should be passed in headers, not URL parameters"
+    given: "$.components.securitySchemes[?(@.type === 'apiKey')]"
+    severity: error
+    then:
+      field: "in"
+      function: "pattern"
+      functionOptions:
+        match: "^(header|cookie)$"
+
+overrides:
+  # Less strict rules for development/testing specs
+  - files: ["**/*dev*.yaml", "**/*test*.yaml"]
+    rules:
+      x-form-response-examples: "off"
+      x-form-error-responses: "off"
+  
+  # Stricter rules for production specs
+  - files: ["**/openapi.yaml", "**/*prod*.yaml"]
+    rules:
+      x-form-response-examples: "error"
+      x-form-error-responses: "error"
+      comprehensive-info: "error"

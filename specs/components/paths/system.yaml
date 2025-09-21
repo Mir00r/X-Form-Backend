@@ -1,0 +1,187 @@
+# System and Health Check Endpoints
+
+Health:
+  get:
+    tags:
+      - System
+    operationId: getHealth
+    summary: Check service health
+    description: |
+      Returns the health status of the service and its dependencies.
+      
+      ### Health Checks Include
+      - Service uptime and version information
+      - Database connectivity status
+      - External service dependencies
+      - Resource utilization metrics
+      - Overall system health assessment
+    responses:
+      '200':
+        description: Service is healthy
+        content:
+          application/json:
+            schema:
+              allOf:
+                - $ref: '../schemas/common.yaml#/SuccessResponse'
+                - type: object
+                  properties:
+                    data:
+                      $ref: '../schemas/common.yaml#/HealthStatus'
+            examples:
+              healthy:
+                summary: All systems healthy
+                value:
+                  success: true
+                  data:
+                    status: "healthy"
+                    timestamp: "2025-09-21T10:30:00Z"
+                    uptime: 86400.5
+                    version: "1.0.0"
+                    environment: "development"
+                    services:
+                      database:
+                        status: "healthy"
+                        responseTime: 25.3
+                        lastCheck: "2025-09-21T10:29:45Z"
+                        message: "Database connection successful"
+                      redis:
+                        status: "healthy"
+                        responseTime: 1.2
+                        lastCheck: "2025-09-21T10:29:45Z"
+                        message: "Redis connection successful"
+                  timestamp: "2025-09-21T10:30:00Z"
+              degraded:
+                summary: Some systems degraded
+                value:
+                  success: true
+                  data:
+                    status: "degraded"
+                    timestamp: "2025-09-21T10:30:00Z"
+                    uptime: 86400.5
+                    version: "1.0.0"
+                    environment: "development"
+                    services:
+                      database:
+                        status: "healthy"
+                        responseTime: 25.3
+                        lastCheck: "2025-09-21T10:29:45Z"
+                      redis:
+                        status: "degraded"
+                        responseTime: 250.7
+                        lastCheck: "2025-09-21T10:29:45Z"
+                        message: "High response time detected"
+                  timestamp: "2025-09-21T10:30:00Z"
+      '503':
+        description: Service is unhealthy
+        content:
+          application/json:
+            schema:
+              allOf:
+                - $ref: '../schemas/common.yaml#/ErrorResponse'
+                - type: object
+                  properties:
+                    error:
+                      type: object
+                      properties:
+                        code:
+                          type: string
+                          example: "SERVICE_UNHEALTHY"
+                        message:
+                          type: string
+                          example: "Service is currently unhealthy"
+                        details:
+                          $ref: '../schemas/common.yaml#/HealthStatus'
+            examples:
+              unhealthy:
+                summary: Service unhealthy
+                value:
+                  success: false
+                  error:
+                    code: "SERVICE_UNHEALTHY"
+                    message: "Service is currently unhealthy"
+                    details:
+                      status: "unhealthy"
+                      timestamp: "2025-09-21T10:30:00Z"
+                      uptime: 86400.5
+                      version: "1.0.0"
+                      environment: "development"
+                      services:
+                        database:
+                          status: "unhealthy"
+                          responseTime: null
+                          lastCheck: "2025-09-21T10:29:45Z"
+                          message: "Connection failed"
+                        redis:
+                          status: "healthy"
+                          responseTime: 1.2
+                          lastCheck: "2025-09-21T10:29:45Z"
+                  timestamp: "2025-09-21T10:30:00Z"
+
+Metrics:
+  get:
+    tags:
+      - System
+    operationId: getMetrics
+    summary: Get service metrics
+    description: |
+      Returns Prometheus-compatible metrics for monitoring and alerting.
+      
+      ### Metrics Include
+      - HTTP request metrics (rate, duration, errors)
+      - Database operation metrics
+      - Custom business metrics
+      - Resource utilization metrics
+      - Application-specific counters and gauges
+    security:
+      - BearerAuth: []
+    responses:
+      '200':
+        description: Metrics retrieved successfully
+        content:
+          text/plain:
+            schema:
+              type: string
+              description: Prometheus metrics format
+              example: |
+                # HELP http_requests_total Total number of HTTP requests
+                # TYPE http_requests_total counter
+                http_requests_total{method="GET",endpoint="/health",status="200"} 1247
+                http_requests_total{method="POST",endpoint="/api/v1/forms",status="201"} 89
+                
+                # HELP http_request_duration_seconds HTTP request duration in seconds
+                # TYPE http_request_duration_seconds histogram
+                http_request_duration_seconds_bucket{method="GET",endpoint="/health",le="0.1"} 1200
+                http_request_duration_seconds_bucket{method="GET",endpoint="/health",le="0.5"} 1247
+                http_request_duration_seconds_bucket{method="GET",endpoint="/health",le="1"} 1247
+                http_request_duration_seconds_bucket{method="GET",endpoint="/health",le="+Inf"} 1247
+                http_request_duration_seconds_sum{method="GET",endpoint="/health"} 124.7
+                http_request_duration_seconds_count{method="GET",endpoint="/health"} 1247
+                
+                # HELP database_connections_active Active database connections
+                # TYPE database_connections_active gauge
+                database_connections_active 8
+                
+                # HELP forms_total Total number of forms created
+                # TYPE forms_total counter
+                forms_total 152
+          application/json:
+            schema:
+              type: object
+              description: JSON metrics format (alternative)
+              properties:
+                timestamp:
+                  type: string
+                  format: date-time
+                  example: "2025-09-21T10:30:00Z"
+                metrics:
+                  type: object
+                  additionalProperties: true
+                  example:
+                    http_requests_total: 1247
+                    database_connections_active: 8
+                    forms_total: 152
+                    average_response_time_ms: 125.3
+      '401':
+        $ref: '../schemas/common.yaml#/responses/Unauthorized'
+      '500':
+        $ref: '../schemas/common.yaml#/responses/InternalServerError'

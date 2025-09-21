@@ -1,0 +1,527 @@
+openapi: 3.0.3
+info:
+  title: X-Form Auth Service API
+  version: 1.0.0
+  description: |
+    # Authentication & User Management Service
+    
+    Production-ready authentication and user management microservice built with Clean Architecture and SOLID principles.
+    
+    ## Features
+    - 🔐 JWT-based authentication with refresh tokens
+    - 👤 User registration and profile management
+    - 📧 Email verification and password reset
+    - 🛡️ Rate limiting and security features
+    - 📊 Health checks and monitoring
+    - 🎯 RESTful API design
+
+servers:
+  - url: http://localhost:3001/api/v1
+    description: Local Development
+  - url: https://auth.x-form.com/api/v1
+    description: Production
+
+paths:
+  /auth/register:
+    post:
+      tags:
+        - Authentication
+      operationId: registerUser
+      summary: Register a new user account
+      description: |
+        Creates a new user account with email verification.
+        
+        ### Business Rules
+        - Email must be unique across the system
+        - Password must meet complexity requirements
+        - Email verification is required before account activation
+        - Rate limited to prevent abuse
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+            examples:
+              standard:
+                summary: Standard registration
+                value:
+                  email: "john.doe@example.com"
+                  password: "SecurePassword123!"
+                  firstName: "John"
+                  lastName: "Doe"
+                  acceptTerms: true
+              withOrganization:
+                summary: Registration with organization
+                value:
+                  email: "admin@company.com"
+                  password: "SecurePassword123!"
+                  firstName: "Admin"
+                  lastName: "User"
+                  organizationName: "Acme Corporation"
+                  acceptTerms: true
+      responses:
+        '201':
+          description: User registered successfully
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '../components/schemas/common.yaml#/CreatedResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/AuthResponse'
+              examples:
+                success:
+                  summary: Successful registration
+                  value:
+                    success: true
+                    data:
+                      user:
+                        id: "550e8400-e29b-41d4-a716-446655440000"
+                        email: "john.doe@example.com"
+                        firstName: "John"
+                        lastName: "Doe"
+                        status: "pending_verification"
+                        createdAt: "2025-09-21T10:30:00Z"
+                      tokens:
+                        accessToken: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+                        refreshToken: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+                        expiresIn: 3600
+                    timestamp: "2025-09-21T10:30:00Z"
+                    correlationId: "550e8400-e29b-41d4-a716-446655440001"
+        '400':
+          $ref: '../components/schemas/common.yaml#/responses/BadRequest'
+        '409':
+          $ref: '../components/schemas/common.yaml#/responses/Conflict'
+        '429':
+          $ref: '../components/schemas/common.yaml#/responses/RateLimited'
+        '500':
+          $ref: '../components/schemas/common.yaml#/responses/InternalServerError'
+
+  /auth/login:
+    post:
+      tags:
+        - Authentication
+      operationId: loginUser
+      summary: Authenticate user and obtain tokens
+      description: |
+        Authenticates a user with email and password, returning JWT tokens.
+        
+        ### Security Features
+        - Rate limiting to prevent brute force attacks
+        - Account lockout after failed attempts
+        - Secure password verification
+        - JWT token generation with refresh capability
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+            examples:
+              standard:
+                summary: Standard login
+                value:
+                  email: "john.doe@example.com"
+                  password: "SecurePassword123!"
+                  rememberMe: false
+              rememberMe:
+                summary: Login with remember me
+                value:
+                  email: "john.doe@example.com"
+                  password: "SecurePassword123!"
+                  rememberMe: true
+      responses:
+        '200':
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '../components/schemas/common.yaml#/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/AuthResponse'
+              examples:
+                success:
+                  summary: Successful login
+                  value:
+                    success: true
+                    data:
+                      user:
+                        id: "550e8400-e29b-41d4-a716-446655440000"
+                        email: "john.doe@example.com"
+                        firstName: "John"
+                        lastName: "Doe"
+                        status: "active"
+                        lastLoginAt: "2025-09-21T10:30:00Z"
+                      tokens:
+                        accessToken: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+                        refreshToken: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+                        expiresIn: 3600
+                    timestamp: "2025-09-21T10:30:00Z"
+                    correlationId: "550e8400-e29b-41d4-a716-446655440001"
+        '400':
+          $ref: '../components/schemas/common.yaml#/responses/BadRequest'
+        '401':
+          $ref: '../components/schemas/common.yaml#/responses/Unauthorized'
+        '429':
+          $ref: '../components/schemas/common.yaml#/responses/RateLimited'
+        '500':
+          $ref: '../components/schemas/common.yaml#/responses/InternalServerError'
+
+  /auth/refresh:
+    post:
+      tags:
+        - Authentication
+      operationId: refreshToken
+      summary: Refresh authentication tokens
+      description: |
+        Exchanges a valid refresh token for new access and refresh tokens.
+        
+        ### Token Management
+        - Refresh tokens have longer validity periods
+        - Old refresh tokens are invalidated upon successful refresh
+        - Rate limiting applies to prevent token abuse
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RefreshTokenRequest'
+            examples:
+              standard:
+                summary: Token refresh
+                value:
+                  refreshToken: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+      responses:
+        '200':
+          description: Tokens refreshed successfully
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '../components/schemas/common.yaml#/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/TokenResponse'
+        '400':
+          $ref: '../components/schemas/common.yaml#/responses/BadRequest'
+        '401':
+          $ref: '../components/schemas/common.yaml#/responses/Unauthorized'
+        '500':
+          $ref: '../components/schemas/common.yaml#/responses/InternalServerError'
+
+  /auth/logout:
+    post:
+      tags:
+        - Authentication
+      operationId: logoutUser
+      summary: Logout user and invalidate tokens
+      description: |
+        Logs out the authenticated user and invalidates their tokens.
+        
+        ### Security Considerations
+        - Invalidates both access and refresh tokens
+        - Clears server-side session data
+        - Optional device-specific logout
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LogoutRequest'
+            examples:
+              standard:
+                summary: Standard logout
+                value:
+                  allDevices: false
+              allDevices:
+                summary: Logout from all devices
+                value:
+                  allDevices: true
+      responses:
+        '200':
+          description: Logout successful
+          content:
+            application/json:
+              schema:
+                $ref: '../components/schemas/common.yaml#/SuccessResponse'
+        '401':
+          $ref: '../components/schemas/common.yaml#/responses/Unauthorized'
+        '500':
+          $ref: '../components/schemas/common.yaml#/responses/InternalServerError'
+
+  /auth/me:
+    get:
+      tags:
+        - Authentication
+      operationId: getCurrentUser
+      summary: Get current user profile
+      description: |
+        Retrieves the profile information for the authenticated user.
+        
+        ### Response Data
+        - Complete user profile information
+        - Account status and verification details
+        - Organization membership information
+        - User preferences and settings
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: User profile retrieved successfully
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '../components/schemas/common.yaml#/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '../components/schemas/common.yaml#/User'
+        '401':
+          $ref: '../components/schemas/common.yaml#/responses/Unauthorized'
+        '500':
+          $ref: '../components/schemas/common.yaml#/responses/InternalServerError'
+
+    patch:
+      tags:
+        - Authentication
+      operationId: updateCurrentUser
+      summary: Update current user profile
+      description: |
+        Updates the profile information for the authenticated user.
+        
+        ### Updatable Fields
+        - Basic profile information (name, phone, avatar)
+        - User preferences and settings
+        - Notification preferences
+        - Display preferences
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateUserRequest'
+            examples:
+              basicInfo:
+                summary: Update basic information
+                value:
+                  firstName: "John"
+                  lastName: "Smith"
+                  phoneNumber: "+1-555-987-6543"
+              preferences:
+                summary: Update preferences
+                value:
+                  preferences:
+                    theme: "dark"
+                    language: "en-US"
+                    notifications:
+                      email: true
+                      push: false
+      responses:
+        '200':
+          description: User profile updated successfully
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '../components/schemas/common.yaml#/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '../components/schemas/common.yaml#/User'
+        '400':
+          $ref: '../components/schemas/common.yaml#/responses/BadRequest'
+        '401':
+          $ref: '../components/schemas/common.yaml#/responses/Unauthorized'
+        '500':
+          $ref: '../components/schemas/common.yaml#/responses/InternalServerError'
+
+components:
+  schemas:
+    RegisterRequest:
+      type: object
+      required:
+        - email
+        - password
+        - firstName
+        - lastName
+        - acceptTerms
+      properties:
+        email:
+          type: string
+          format: email
+          description: User email address
+          example: "john.doe@example.com"
+        password:
+          type: string
+          format: password
+          minLength: 8
+          pattern: '^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$'
+          description: Password meeting complexity requirements
+          example: "SecurePassword123!"
+        firstName:
+          type: string
+          minLength: 1
+          maxLength: 50
+          description: User first name
+          example: "John"
+        lastName:
+          type: string
+          minLength: 1
+          maxLength: 50
+          description: User last name
+          example: "Doe"
+        phoneNumber:
+          type: string
+          nullable: true
+          pattern: '^[\+]?[1-9][\d]{0,15}$'
+          description: User phone number
+          example: "+1-555-123-4567"
+        organizationName:
+          type: string
+          nullable: true
+          maxLength: 100
+          description: Organization name (for new organization creation)
+          example: "Acme Corporation"
+        acceptTerms:
+          type: boolean
+          description: Acceptance of terms and conditions
+          example: true
+        acceptMarketing:
+          type: boolean
+          default: false
+          description: Opt-in for marketing communications
+          example: false
+
+    LoginRequest:
+      type: object
+      required:
+        - email
+        - password
+      properties:
+        email:
+          type: string
+          format: email
+          description: User email address
+          example: "john.doe@example.com"
+        password:
+          type: string
+          format: password
+          description: User password
+          example: "SecurePassword123!"
+        rememberMe:
+          type: boolean
+          default: false
+          description: Extended session duration
+          example: false
+
+    RefreshTokenRequest:
+      type: object
+      required:
+        - refreshToken
+      properties:
+        refreshToken:
+          type: string
+          description: Valid refresh token
+          example: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+
+    LogoutRequest:
+      type: object
+      properties:
+        allDevices:
+          type: boolean
+          default: false
+          description: Logout from all devices
+          example: false
+
+    UpdateUserRequest:
+      type: object
+      properties:
+        firstName:
+          type: string
+          minLength: 1
+          maxLength: 50
+          description: User first name
+          example: "John"
+        lastName:
+          type: string
+          minLength: 1
+          maxLength: 50
+          description: User last name
+          example: "Doe"
+        phoneNumber:
+          type: string
+          nullable: true
+          pattern: '^[\+]?[1-9][\d]{0,15}$'
+          description: User phone number
+          example: "+1-555-123-4567"
+        avatar:
+          type: string
+          format: uri
+          nullable: true
+          description: User avatar URL
+          example: "https://example.com/avatars/john-doe.jpg"
+        preferences:
+          $ref: '../components/schemas/common.yaml#/UserPreferences'
+
+    AuthResponse:
+      type: object
+      required:
+        - user
+        - tokens
+      properties:
+        user:
+          $ref: '../components/schemas/common.yaml#/User'
+        tokens:
+          $ref: '#/components/schemas/TokenResponse'
+
+    TokenResponse:
+      type: object
+      required:
+        - accessToken
+        - refreshToken
+        - expiresIn
+      properties:
+        accessToken:
+          type: string
+          description: JWT access token
+          example: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+        refreshToken:
+          type: string
+          description: JWT refresh token
+          example: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+        expiresIn:
+          type: integer
+          description: Token expiration time in seconds
+          example: 3600
+        tokenType:
+          type: string
+          default: "Bearer"
+          description: Token type
+          example: "Bearer"
+
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+security:
+  - BearerAuth: []
+
+tags:
+  - name: Authentication
+    description: User authentication and authorization operations
