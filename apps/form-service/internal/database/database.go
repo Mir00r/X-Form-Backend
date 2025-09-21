@@ -38,10 +38,20 @@ func Connect(databaseURL string) (*gorm.DB, error) {
 
 // Migrate runs database migrations
 func Migrate(db *gorm.DB) error {
-	return db.AutoMigrate(
-		&models.Form{},
-		&models.Question{},
-	)
+	// Migrate models one by one to isolate issues
+	if err := db.AutoMigrate(&models.Form{}); err != nil {
+		return fmt.Errorf("failed to migrate Form: %w", err)
+	}
+
+	if err := db.AutoMigrate(&models.Question{}); err != nil {
+		return fmt.Errorf("failed to migrate Question: %w", err)
+	}
+
+	if err := db.AutoMigrate(&models.Collaborator{}); err != nil {
+		return fmt.Errorf("failed to migrate Collaborator: %w", err)
+	}
+
+	return nil
 }
 
 // ConnectRedis establishes a connection to Redis

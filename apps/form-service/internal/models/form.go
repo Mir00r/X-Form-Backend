@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"gorm.io/datatypes"
 	"gorm.io/gorm"
 )
 
@@ -47,25 +48,6 @@ func (fs FormSettings) Validate() error {
 	return nil
 }
 
-// Value implements the driver.Valuer interface for FormSettings
-func (fs FormSettings) Value() (interface{}, error) {
-	return json.Marshal(fs)
-}
-
-// Scan implements the sql.Scanner interface for FormSettings
-func (fs *FormSettings) Scan(value interface{}) error {
-	if value == nil {
-		return nil
-	}
-
-	bytes, ok := value.([]byte)
-	if !ok {
-		return fmt.Errorf("cannot scan %T into FormSettings", value)
-	}
-
-	return json.Unmarshal(bytes, fs)
-}
-
 // Form represents a form entity
 type Form struct {
 	ID          uuid.UUID      `gorm:"type:uuid;primaryKey" json:"id"`
@@ -73,13 +55,18 @@ type Form struct {
 	Title       string         `gorm:"size:200;not null" json:"title"`
 	Description string         `gorm:"type:text" json:"description"`
 	Status      FormStatus     `gorm:"size:20;not null;default:'draft'" json:"status"`
-	Settings    FormSettings   `gorm:"type:jsonb" json:"settings"`
+	Settings    datatypes.JSON `gorm:"type:jsonb" json:"settings"`
 	CreatedAt   time.Time      `json:"created_at"`
 	UpdatedAt   time.Time      `json:"updated_at"`
 	DeletedAt   gorm.DeletedAt `gorm:"index" json:"deleted_at,omitempty"`
+
+	// Computed fields (not stored in database)
+	QuestionCount     int `gorm:"-" json:"question_count,omitempty"`
+	CollaboratorCount int `gorm:"-" json:"collaborator_count,omitempty"`
+	ResponseCount     int `gorm:"-" json:"response_count,omitempty"`
 }
 
-// BeforeCreate GORM hook called before creating a form
+// BeforeCreate hook is called before creating a form
 func (f *Form) BeforeCreate(tx *gorm.DB) error {
 	if f.ID == uuid.Nil {
 		f.ID = uuid.New()
@@ -91,10 +78,6 @@ func (f *Form) BeforeCreate(tx *gorm.DB) error {
 
 	if f.Status == "" {
 		f.Status = FormStatusDraft
-	}
-
-	if f.Settings.ConfirmationMessage == "" {
-		f.Settings.ConfirmationMessage = "Thank you for your response!"
 	}
 
 	return nil
@@ -118,7 +101,18 @@ func (f *Form) Validate() error {
 		return fmt.Errorf("invalid form status: %s", f.Status)
 	}
 
-	return f.Settings.Validate()
+	// Validate settings if they exist
+	if len(f.Settings) > 0 {
+		var settings FormSettings
+		if err := json.Unmarshal(f.Settings, &settings); err != nil {
+			return fmt.Errorf("invalid form settings JSON: %w", err)
+		}
+		if err := settings.Validate(); err != nil {
+			return fmt.Errorf("invalid form settings: %w", err)
+		}
+	}
+
+	return nil
 }
 
 // TableName returns the table name for GORM

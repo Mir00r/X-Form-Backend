@@ -74,11 +74,7 @@ func NewFormRepository(db *gorm.DB) FormRepository {
 
 // Create creates a new form in the database
 func (r *formRepository) Create(ctx context.Context, form *models.Form) error {
-	// Set default settings if not provided
-	if form.Settings.AcceptingResponses == false {
-		form.Settings.AcceptingResponses = true
-	}
-
+	// Settings are handled in the BeforeCreate hook of the model
 	return r.db.WithContext(ctx).Create(form).Error
 }
 

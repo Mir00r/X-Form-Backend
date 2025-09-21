@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 
 	"github.com/google/uuid"
@@ -102,7 +103,11 @@ func (s *formService) CreateForm(ctx context.Context, userID uuid.UUID, req Crea
 		Title:       req.Title,
 		Description: req.Description,
 		Status:      models.FormStatusDraft,
-		Settings:    req.Settings,
+	}
+
+	// Convert FormSettings to JSON
+	if settingsJSON, err := json.Marshal(req.Settings); err == nil {
+		form.Settings = settingsJSON
 	}
 
 	if err := s.formRepo.Create(ctx, form); err != nil {
@@ -174,7 +179,10 @@ func (s *formService) UpdateForm(ctx context.Context, id uuid.UUID, userID uuid.
 		form.Description = *req.Description
 	}
 	if req.Settings != nil {
-		form.Settings = *req.Settings
+		// Convert FormSettings to JSON
+		if settingsJSON, err := json.Marshal(*req.Settings); err == nil {
+			form.Settings = settingsJSON
+		}
 	}
 
 	if err := s.formRepo.Update(ctx, form); err != nil {

@@ -18,8 +18,8 @@ services:
       - "8002:8002"   # WebSocket
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
-      - ./infrastructure/traefik/traefik.yml:/etc/traefik/traefik.yml:ro
-      - ./infrastructure/traefik/dynamic:/etc/traefik/dynamic:ro
+      - ../traefik/traefik.yml:/etc/traefik/traefik.yml:ro
+      - ../traefik/dynamic:/etc/traefik/dynamic:ro
       - traefik-data:/data
       - traefik-logs:/var/log/traefik
     environment:
@@ -48,7 +48,7 @@ services:
   # Auth Service
   auth-service:
     build:
-      context: ./apps/auth-service
+      context: ../../apps/auth-service
       dockerfile: Dockerfile
     container_name: xform-auth
     restart: unless-stopped
@@ -80,7 +80,7 @@ services:
   # Form Service
   form-service:
     build:
-      context: ./apps/form-service
+      context: ../../apps/form-service
       dockerfile: Dockerfile
     container_name: xform-forms
     restart: unless-stopped
@@ -108,7 +108,7 @@ services:
   # Response Service
   response-service:
     build:
-      context: ./apps/response-service
+      context: ../../apps/response-service
       dockerfile: Dockerfile
     container_name: xform-responses
     restart: unless-stopped
@@ -137,7 +137,7 @@ services:
   # Real-time Service
   realtime-service:
     build:
-      context: ./apps/realtime-service
+      context: ../../apps/realtime-service
       dockerfile: Dockerfile
     container_name: xform-realtime
     restart: unless-stopped
@@ -162,7 +162,7 @@ services:
   # Analytics Service
   analytics-service:
     build:
-      context: ./apps/analytics-service
+      context: ../../apps/analytics-service
       dockerfile: Dockerfile
     container_name: xform-analytics
     restart: unless-stopped

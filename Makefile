@@ -58,7 +58,8 @@ verify: ## Verify development environment setup
 
 start: ## Start all services in production mode
 	@echo "$(GREEN)🚀 Starting all services in production mode...$(RESET)"
-	@docker compose -f $(DOCKER_COMPOSE_PROD) up -d
+	@[ -f .env ] || (echo "$(RED)❌ .env file not found. Copy .env.example to .env first.$(RESET)" && exit 1)
+	@docker compose --env-file .env -f $(DOCKER_COMPOSE_PROD) up -d
 	@$(MAKE) wait-for-services
 	@$(MAKE) health
 	@echo "$(GREEN)✅ All services started successfully!$(RESET)"
